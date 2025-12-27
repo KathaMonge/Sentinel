@@ -25,7 +25,7 @@ class SentinelDashboard(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         
         # Sidebar
-        self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(6, weight=1) # Spacer push down
         
@@ -49,7 +49,7 @@ class SentinelDashboard(ctk.CTk):
         self.chk_noise.select() # Default on
         self.chk_noise.grid(row=5, column=0, padx=20, pady=5)
         
-        self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Temporal Aggr.", command=self.toggle_aggr)
+        self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Dedup. Mode", command=self.toggle_aggr)
         self.chk_aggr.select() # Default on
         self.chk_aggr.grid(row=6, column=0, padx=20, pady=5)
 
@@ -60,14 +60,27 @@ class SentinelDashboard(ctk.CTk):
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         
-        self.view_label = ctk.CTkLabel(self.main_frame, text="Network Intelligence", font=ctk.CTkFont(size=24, weight="bold"))
+        self.view_label = ctk.CTkLabel(self.main_frame, text="Operational Overview", font=ctk.CTkFont(size=24, weight="bold"))
         self.view_label.pack(anchor="w", pady=(0, 10))
+
+        # --- Overview View (Stats) ---
+        self.overview_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        
+        # Grid for stats
+        self.overview_frame.grid_columnconfigure(0, weight=1)
+        self.overview_frame.grid_columnconfigure(1, weight=1)
+        self.overview_frame.grid_columnconfigure(2, weight=1)
+        
+        # Stats Widgets
+        self.lbl_pkt_count = self._create_stat_card(self.overview_frame, "Total Packets", "0", 0, "blue")
+        self.lbl_noise_count = self._create_stat_card(self.overview_frame, "Noise Filtered", "0", 1, "gray")
+        self.lbl_alert_count = self._create_stat_card(self.overview_frame, "Security Alerts", "0", 2, "orange")
 
         # --- Network View ---
         self.network_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         
-        # Network Header
-        header_text = "TIME     | PROCESS         | DESTINATION     | PORT  | GEO | MESSAGE                        | LATENCY | COUNT"
+        # Network Header (Adjusted Time padding)
+        header_text = "TIME          | PROCESS              | DESTINATION        | PORT  | GEO | MESSAGE                             | LATENCY | COUNT"
         self.net_header_lbl = ctk.CTkLabel(self.network_frame, text=header_text, font=("Consolas", 11, "bold"), anchor="w", text_color="silver")
         self.net_header_lbl.pack(fill="x")
         
@@ -81,7 +94,7 @@ class SentinelDashboard(ctk.CTk):
         self.system_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         
         # System Header
-        sys_header_text = "TIME     | SOURCE          | SEVERITY | MESSAGE"
+        sys_header_text = "TIME          | SOURCE          | SEVERITY | MESSAGE"
         self.sys_header_lbl = ctk.CTkLabel(self.system_frame, text=sys_header_text, font=("Consolas", 11, "bold"), anchor="w", text_color="silver")
         self.sys_header_lbl.pack(fill="x")
         
@@ -92,11 +105,32 @@ class SentinelDashboard(ctk.CTk):
         self._setup_tags(self.system_log)
         
         # Default View
-        self.active_view = "Network"
-        self.network_frame.pack(fill="both", expand=True)
+        self.active_view = "Overview"
+        self.overview_frame.pack(fill="both", expand=True)
+        # self.network_frame.pack(fill="both", expand=True) # Old default
         
-        # Start polling queue
+        # Start loops
         self.check_queue()
+        self.update_stats()
+
+    def _create_stat_card(self, parent, title, value, col, color):
+        frame = ctk.CTkFrame(parent, height=150, fg_color=("#333333", "#2b2b2b")) # Card background
+        frame.grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
+        
+        lbl_title = ctk.CTkLabel(frame, text=title, font=("Arial", 14), text_color="silver")
+        lbl_title.pack(pady=(20, 5))
+        
+        lbl_val = ctk.CTkLabel(frame, text=value, font=("Arial", 32, "bold"), text_color=color)
+        lbl_val.pack(pady=10)
+        
+        return lbl_val
+
+    def update_stats(self):
+        """Update live counters."""
+        self.lbl_pkt_count.configure(text=f"{self.app_state.pkt_count:,}")
+        self.lbl_noise_count.configure(text=f"{self.app_state.noise_count:,}")
+        self.lbl_alert_count.configure(text=f"{self.app_state.alert_count:,}")
+        self.after(1000, self.update_stats)
 
     def _setup_tags(self, textbox):
         textbox.tag_config("Trace", foreground="gray")
@@ -127,13 +161,18 @@ class SentinelDashboard(ctk.CTk):
         # Hide all first
         self.network_frame.pack_forget()
         self.system_frame.pack_forget()
+        self.overview_frame.pack_forget()
         
-        if view_name == "System Event Logs":
+        if view_name == "Overview":
+            self.active_view = "Overview"
+            self.view_label.configure(text="Operational Overview")
+            self.overview_frame.pack(fill="both", expand=True)
+        elif view_name == "System Event Logs":
             self.active_view = "System"
             self.view_label.configure(text="System Events")
             self.system_frame.pack(fill="both", expand=True)
         else:
-            # Default to Network for Overview/Network
+            # Default to Network for Network Monitoring
             self.active_view = "Network"
             self.view_label.configure(text="Network Intelligence")
             self.network_frame.pack(fill="both", expand=True)
@@ -164,11 +203,12 @@ class SentinelDashboard(ctk.CTk):
             # --- Network Log (Columnar) ---
             target_log = self.network_log
             
-            proc = (alert.process_name or "Unknown")[:15].ljust(15)
-            dest = (alert.dst_ip or "-").ljust(15)
-            port = str(alert.dst_port or "-").ljust(5)
-            geo = (alert.country or "-").ljust(3)
-            msg = alert.message[:30].ljust(30)
+            # Strict fixed-width formatting
+            proc = (alert.process_name or "Unknown")[:20].ljust(20)
+            dest = (alert.dst_ip or "-")[:18].ljust(18)
+            port = str(alert.dst_port or "-")[:5].ljust(5)
+            geo = (alert.country or "-")[:3].ljust(3)
+            msg = alert.message[:35].ljust(35)
             cnt = f"[x{alert.count}]" if alert.count > 1 else "    "
             lat = f"{latency_ms:3.0f}ms"
 

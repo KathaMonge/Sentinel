@@ -72,13 +72,22 @@ class SnifferThread(threading.Thread):
 
     def is_noise(self, dst_ip, dst_port, protocol):
         """Identifies mDNS, SSDP, Broadcast, and Multicast traffic."""
+        # SSDP specific
+        if dst_ip == "239.255.255.250":
+            return True
+            
         # Broadcast/Multicast IPs
         if dst_ip == "255.255.255.255" or dst_ip.startswith("224.") or dst_ip.startswith("239."):
             return True
         
         # Local Noise Ports
-        noise_ports = {5353, 5355, 1900} # mDNS, LLMNR, SSDP
+        noise_ports = {5353, 5355, 1900, 67, 68} # mDNS, LLMNR, SSDP, DHCP
+        # 6667 often seen in local noise in sample
         if dst_port in noise_ports:
+            return True
+        
+        # Filter "Unknown Outbound None" often seen
+        if protocol is None or protocol == "None":
             return True
             
         return False
@@ -124,8 +133,15 @@ class SnifferThread(threading.Thread):
                     dst_port = int(packet.udp.dstport)
                     src_port = int(packet.udp.srcport)
                 
+                # Counters
+                self.app_state.pkt_count += 1
+                
                 # Noise Filtering
-                if self.app_state.hide_local_noise and self.is_noise(dst_ip, dst_port, protocol):
+                is_noise_packet = self.is_noise(dst_ip, dst_port, protocol)
+                if is_noise_packet:
+                    self.app_state.noise_count += 1
+                    
+                if self.app_state.hide_local_noise and is_noise_packet:
                     return
 
                 # Get Intelligence
@@ -143,6 +159,7 @@ class SnifferThread(threading.Thread):
                     severity = "Warning"
                     alert_type = "Network"
                     message = "Unencrypted HTTP"
+                    self.app_state.alert_count += 1 # Security Alert
                 
                 alert = Alert(
                     timestamp=timestamp,
@@ -159,6 +176,10 @@ class SnifferThread(threading.Thread):
                 )
 
                 if self.app_state.show_all_traffic or alert_type == "Network":
+                    if alert_type == "Traffic":
+                         pass # Don't count traffic as "Security Alerts" for the counter, or maybe we do?
+                         # The prompt said "Security Alerts: Alerts generated (Port 80, etc.)"
+                         # So I will only count Port 80 above.
                     self.emit_alert(alert)
                     
         except Exception:

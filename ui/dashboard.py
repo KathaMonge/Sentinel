@@ -295,6 +295,26 @@ class SentinelDashboard(ctk.CTk):
             target_log.configure(state="normal")
             target_log.insert("1.0", formatted_line, alert.severity)
             target_log.configure(state="disabled")
+            
+        # Global Alert Feedback
+        if alert.severity in ["Warning", "Critical"]:
+            self._flash_alert_status()
+
+    def _flash_alert_status(self):
+        """Briefly change status label to show alert detection."""
+        prev_text = self.status_lbl.cget("text")
+        prev_color = self.status_lbl.cget("text_color")
+        
+        self.status_lbl.configure(text="ALERT DETECTED!", text_color="red")
+        
+        # Schedule reset
+        def reset():
+            if self.app_state.monitoring_active:
+                self.status_lbl.configure(text="STATUS: RUNNING", text_color="green")
+            else:
+                self.status_lbl.configure(text="STATUS: PAUSED", text_color="orange")
+        
+        self.after(3000, reset)
 
 def start_gui(alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
     app = SentinelDashboard(alert_queue, app_state, db_manager)

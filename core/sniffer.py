@@ -128,6 +128,11 @@ class SnifferThread(threading.Thread):
             self.flow_cache[h] = alert
             self.alert_queue.put(alert)
             self.db_manager.save_alert(alert)
+            
+            # Export and Terminal Feedback for new security alerts
+            if alert.severity in ["Warning", "Critical"]:
+                print(f"\n[!] SECURITY ALERT: [{alert.severity}] {alert.message} | Source: {alert.source}")
+                self.db_manager.log_security_event(alert)
 
     def process_packet(self, packet):
         if not self.app_state.monitoring_active:
@@ -153,8 +158,6 @@ class SnifferThread(threading.Thread):
                 
                 # Counters
                 self.app_state.pkt_count += 1
-                if self.app_state.show_all_traffic:
-                    print(f"[*] Processed packet: {src_ip} -> {dst_ip}:{dst_port} ({protocol})")
                 
                 # Noise Filtering
                 is_noise_packet = self.is_noise(dst_ip, dst_port, protocol)

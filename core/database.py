@@ -101,3 +101,21 @@ class DatabaseManager:
             except Exception as e:
                 print(f"[!] Database retrieval error: {e}")
         return alerts
+
+    def log_security_event(self, alert: Alert):
+        """Append high-severity alerts to a dedicated log file."""
+        if alert.severity not in ["Warning", "Critical"]:
+            return
+            
+        log_path = "data/security_alerts.log"
+        timestamp = alert.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] [{alert.severity}] [{alert.alert_type}] Source: {alert.source} | Msg: {alert.message} | PID: {alert.process_id} ({alert.process_name})\n"
+        
+        with self.lock:
+            try:
+                import os
+                os.makedirs("data", exist_ok=True)
+                with open(log_path, "a", encoding="utf-8") as f:
+                    f.write(log_entry)
+            except Exception as e:
+                print(f"[!] Alert logging failed: {e}")

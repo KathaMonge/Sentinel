@@ -81,6 +81,7 @@ class LogWatcherThread(threading.Thread):
             err_alert = Alert(datetime.now(), "System", "Info", "LogWatcher", f"Could not access Security Log (Run as Admin?): {e}")
             self.alert_queue.put(err_alert)
             self.db_manager.save_alert(err_alert)
+            self.db_manager.log_security_event(err_alert)
 
     def stop(self):
         self.running = False

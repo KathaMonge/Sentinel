@@ -112,9 +112,9 @@ class SnifferThread(threading.Thread):
                         country=country
                     )
                     self.alert_queue.put(alert)
-                    return # Avoid double logging if streaming is on
+                    return # Avoid double logging if Audit Mode is on
 
-                # Real-time Streaming (if enabled)
+                # Audit All Mode (Real-time Streaming)
                 if self.app_state.show_all_traffic:
                     sender = f"{process_name} ({pid})" if pid else "Unknown"
                     msg = f"Traffic: {sender} -> {dst_ip} ({country}) [{protocol}/{dst_port}]"

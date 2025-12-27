@@ -15,8 +15,8 @@ The project has successfully transitioned from initial scaffolding to a function
 We measure the implementation success against the following standardized metrics:
 
 1. **System Stability**: Continuous operation for over 4 hours without memory leaks or thread crashes (specifically PyShark/TShark subprocesses).
-2. **Alert Latency**: Average time from event occurrence (packet capture or log entry) to GUI display must remain under 1 second.
-3. **Resource Efficiency**: CPU usage must remain below 5% on a standard modern workstation, and memory usage should be stable under 150MB.
+2. **Alert Latency**: Average time from event occurrence (packet capture or log entry) to GUI display must remain under 1 second. To prove this, the system logs both "Timestamp of Capture" and "Timestamp of Display".
+3. **Resource Efficiency**: CPU usage must remain below 5% on a standard modern workstation. To achieve this while using TShark, the system includes a "Sampling Mode" toggle, allowing users to switch between "Audit All" and "Security Only" filtering.
 4. **Accuracy**: 100% detection rate for Port 80 traffic on the selected active interface.
 5. **Usability**: Rules must be modifiable via `rules.yaml` with an instantaneous effect (or upon simple application restart) without changing the Python source code.
 

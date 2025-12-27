@@ -41,11 +41,14 @@ class SentinelDashboard(ctk.CTk):
         self.btn_system.grid(row=3, column=0, padx=20, pady=10)
         
         # Controls
-        self.chk_traffic = ctk.CTkCheckBox(self.sidebar_frame, text="Show All Traffic", command=self.toggle_traffic)
-        self.chk_traffic.grid(row=4, column=0, padx=20, pady=20)
+        self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
+        self.chk_audit.grid(row=4, column=0, padx=20, pady=(20, 10))
+        
+        self.audit_status_label = ctk.CTkLabel(self.sidebar_frame, text="Security Only", text_color="green", font=ctk.CTkFont(size=12))
+        self.audit_status_label.grid(row=5, column=0, padx=20, pady=(0, 20))
         
         self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="red", hover_color="darkred", command=self.clear_logs)
-        self.btn_clear.grid(row=5, column=0, padx=20, pady=10)
+        self.btn_clear.grid(row=6, column=0, padx=20, pady=10)
 
         # Main Content Area
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -63,11 +66,16 @@ class SentinelDashboard(ctk.CTk):
         # Start polling queue
         self.check_queue()
 
-    def toggle_traffic(self):
-        state = self.chk_traffic.get() # 1 or 0
+    def toggle_audit(self):
+        state = self.chk_audit.get() # 1 or 0
         self.app_state.show_all_traffic = bool(state)
-        status = "ENABLED" if state else "DISABLED"
-        self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", f"Real-time traffic streaming {status}"))
+        
+        if state:
+            self.audit_status_label.configure(text="Audit All Active", text_color="orange")
+            self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", "Switched to Audit All (Full Visibility)"))
+        else:
+            self.audit_status_label.configure(text="Security Only", text_color="green")
+            self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", "Switched to Security Only (Filtering enabled)"))
 
     def clear_logs(self):
         self.alerts_textbox.configure(state="normal")
@@ -94,9 +102,21 @@ class SentinelDashboard(ctk.CTk):
             self.after(100, self.check_queue)
 
     def add_alert(self, alert: Alert):
-        """Add alert to the display."""
+        """Add alert to the display with latency verification."""
+        display_time = datetime.now()
+        # Calculate latency in milliseconds
+        latency_ms = (display_time - alert.timestamp).total_seconds() * 1000
+        
+        # Format: [CaptureTime] -> [DisplayTime] (Latency) [Severity] Message
+        formatted_msg = (
+            f"[{alert.timestamp.strftime('%H:%M:%S.%f')[:-3]}] -> "
+            f"[{display_time.strftime('%H:%M:%S.%f')[:-3]}] "
+            f"({latency_ms:.0f}ms) "
+            f"[{alert.severity}] {alert.alert_type}: {alert.message}\n"
+        )
+        
         self.alerts_textbox.configure(state="normal")
-        self.alerts_textbox.insert("1.0", str(alert) + "\n") # Add to top
+        self.alerts_textbox.insert("1.0", formatted_msg) # Add to top
         self.alerts_textbox.configure(state="disabled")
 
 def start_gui(alert_queue: queue.Queue, app_state: AppState):

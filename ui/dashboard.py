@@ -12,6 +12,7 @@ class SentinelDashboard(ctk.CTk):
         
         self.alert_queue = alert_queue
         self.app_state = app_state
+        self.last_hash = None # Track top line for deduplication
         
         # Window setup
         self.title("SentinelHIDS - Monitor")
@@ -42,40 +43,52 @@ class SentinelDashboard(ctk.CTk):
         
         # Controls
         self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
-        self.chk_audit.grid(row=4, column=0, padx=20, pady=(20, 10))
+        self.chk_audit.grid(row=4, column=0, padx=20, pady=(10, 5))
         
-        self.audit_status_label = ctk.CTkLabel(self.sidebar_frame, text="Security Only", text_color="green", font=ctk.CTkFont(size=12))
-        self.audit_status_label.grid(row=5, column=0, padx=20, pady=(0, 20))
+        self.chk_noise = ctk.CTkCheckBox(self.sidebar_frame, text="Hide Local Noise", command=self.toggle_noise)
+        self.chk_noise.select() # Default on
+        self.chk_noise.grid(row=5, column=0, padx=20, pady=5)
         
+        self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Temporal Aggr.", command=self.toggle_aggr)
+        self.chk_aggr.select() # Default on
+        self.chk_aggr.grid(row=6, column=0, padx=20, pady=5)
+
         self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="red", hover_color="darkred", command=self.clear_logs)
-        self.btn_clear.grid(row=6, column=0, padx=20, pady=10)
+        self.btn_clear.grid(row=7, column=0, padx=20, pady=(20, 10))
 
         # Main Content Area
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         
         # Header
-        self.header = ctk.CTkLabel(self.main_frame, text="Overview Dashboard", font=ctk.CTkFont(size=24, weight="bold"))
+        self.header = ctk.CTkLabel(self.main_frame, text="Operational Intelligence", font=ctk.CTkFont(size=24, weight="bold"))
         self.header.pack(anchor="w")
         
-        # Alerts Text Box (Simple List for now)
-        self.alerts_textbox = ctk.CTkTextbox(self.main_frame, width=800, height=520)
+        # Alerts Text Box (Structured format)
+        self.alerts_textbox = ctk.CTkTextbox(self.main_frame, width=800, height=520, font=("Consolas", 12))
         self.alerts_textbox.pack(pady=10, fill="both", expand=True)
-        self.alerts_textbox.configure(state="disabled") # Read only
+        self.alerts_textbox.configure(state="disabled")
+        
+        # Color Tags for Severity
+        self.alerts_textbox.tag_config("Trace", foreground="gray")
+        self.alerts_textbox.tag_config("Info", foreground="white") # Notice
+        self.alerts_textbox.tag_config("Warning", foreground="orange")
+        self.alerts_textbox.tag_config("Critical", foreground="red") # Alert
+        self.alerts_textbox.tag_config("System", foreground="cyan")
         
         # Start polling queue
         self.check_queue()
 
     def toggle_audit(self):
-        state = self.chk_audit.get() # 1 or 0
-        self.app_state.show_all_traffic = bool(state)
-        
-        if state:
-            self.audit_status_label.configure(text="Audit All Active", text_color="orange")
-            self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", "Switched to Audit All (Full Visibility)"))
-        else:
-            self.audit_status_label.configure(text="Security Only", text_color="green")
-            self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", "Switched to Security Only (Filtering enabled)"))
+        self.app_state.show_all_traffic = bool(self.chk_audit.get())
+        status = "Audit Mode Active" if self.app_state.show_all_traffic else "Security Only"
+        self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", f"Switched to {status}"))
+
+    def toggle_noise(self):
+        self.app_state.hide_local_noise = bool(self.chk_noise.get())
+
+    def toggle_aggr(self):
+        self.app_state.aggregation_enabled = bool(self.chk_aggr.get())
 
     def clear_logs(self):
         self.alerts_textbox.configure(state="normal")
@@ -102,22 +115,42 @@ class SentinelDashboard(ctk.CTk):
             self.after(100, self.check_queue)
 
     def add_alert(self, alert: Alert):
-        """Add alert to the display with latency verification."""
+        """Add structured alert with columnar formatting and color-coding."""
         display_time = datetime.now()
-        # Calculate latency in milliseconds
         latency_ms = (display_time - alert.timestamp).total_seconds() * 1000
         
-        # Format: [CaptureTime] -> [DisplayTime] (Latency) [Severity] Message
-        formatted_msg = (
-            f"[{alert.timestamp.strftime('%H:%M:%S.%f')[:-3]}] -> "
-            f"[{display_time.strftime('%H:%M:%S.%f')[:-3]}] "
-            f"({latency_ms:.0f}ms) "
-            f"[{alert.severity}] {alert.alert_type}: {alert.message}\n"
-        )
-        
-        self.alerts_textbox.configure(state="normal")
-        self.alerts_textbox.insert("1.0", formatted_msg) # Add to top
-        self.alerts_textbox.configure(state="disabled")
+        # Handle Deduplication: If the same flow hit within 5s, we update the first line
+        # Simple implementation: check if the hash of top line matches
+        h = alert.flow_hash
+        try:
+            self.alerts_textbox.configure(state="normal")
+            
+            # Formatted Columnar string
+            # [TIME] [PROT] [PROCESS] [DESTINATION] [PORT] [GEO] [MSG] [CNT]
+            t_str = alert.timestamp.strftime('%H:%M:%S')
+            proc = (alert.process_name or "Unknown")[:15].ljust(15)
+            dest = (alert.dst_ip or "-").ljust(15)
+            port = str(alert.dst_port or "-").ljust(5)
+            geo = (alert.country or "-").ljust(3)
+            msg = alert.message[:30].ljust(30)
+            cnt = f"[x{alert.count}]" if alert.count > 1 else "    "
+            lat = f"{latency_ms:3.0f}ms"
+
+            formatted_line = f"[{t_str}] {proc} {dest} {port} {geo} {msg} {lat} {cnt}\n"
+
+            # Deduplication: If this hash matches the last one, replace the top line
+            if h == self.last_hash:
+                self.alerts_textbox.delete("1.0", "2.0")
+            
+            self.alerts_textbox.insert("1.0", formatted_line, alert.severity)
+            self.last_hash = h
+            
+            # Keep log buffer manageable (e.g. 500 lines)
+            if float(self.alerts_textbox.index("end-1c")) > 500:
+                self.alerts_textbox.delete("501.0", "end")
+                
+        finally:
+            self.alerts_textbox.configure(state="disabled")
 
 def start_gui(alert_queue: queue.Queue, app_state: AppState):
     app = SentinelDashboard(alert_queue, app_state)

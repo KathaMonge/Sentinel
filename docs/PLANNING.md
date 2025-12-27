@@ -10,15 +10,16 @@ The project has successfully transitioned from initial scaffolding to a function
 - **Phase 2: Network Monitoring (Functional Alpha)**: Integrated PyShark for live packet capture. Currently detects outbound traffic on Port 80 (HTTP). Handles asynchronous event loop issues within dedicated threads.
 - **Phase 3: System Monitoring (Functional Alpha)**: Established the structure for monitoring Windows Security Logs using `pywin32`. Implemented basic privilege checks and feedback loops to the UI.
 - **Phase 4: Graphical User Interface (Functional)**: Developed a modern Dark-Mode dashboard using CustomTkinter. The UI successfully polls the alert queue and updates the display without freezing the main thread.
+- **Phase 5.5: Log Intelligence (Complete)**: Implemented columnar normalization, temporal aggregation (deduplication), and semantic noise suppression (mDNS, SSDP, etc.). Added severity-based highlighting.
 
 ## Success Definition and Key Performance Indicators (KPIs)
 We measure the implementation success against the following standardized metrics:
 
 1. **System Stability**: Continuous operation for over 4 hours without memory leaks or thread crashes (specifically PyShark/TShark subprocesses).
 2. **Alert Latency**: Average time from event occurrence (packet capture or log entry) to GUI display must remain under 1 second. To prove this, the system logs both "Timestamp of Capture" and "Timestamp of Display".
-3. **Resource Efficiency**: CPU usage must remain below 5% on a standard modern workstation. To achieve this while using TShark, the system includes a "Sampling Mode" toggle, allowing users to switch between "Audit All" and "Security Only" filtering.
-4. **Accuracy**: 100% detection rate for Port 80 traffic on the selected active interface.
-5. **Usability**: Rules must be modifiable via `rules.yaml` with an instantaneous effect (or upon simple application restart) without changing the Python source code.
+3. **Resource Efficiency**: CPU usage must remain below 5% on a standard modern workstation. To achieve this while using TShark, the system includes a "Sampling Mode" toggle and "Noise Suppression" to reduce processing overhead.
+4. **Data Density**: Achieve a minimum 60% reduction in UI log row count via temporal aggregation (deduplication).
+5. **Usability**: Rules must be modifiable via `rules.yaml` with an instantaneous effect.
 
 ## Detailed Roadmap for Future Implementation
 

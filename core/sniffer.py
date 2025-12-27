@@ -23,6 +23,10 @@ class SnifferThread(threading.Thread):
         # Initialize Intelligence Modules
         self.process_mapper = ProcessMapper()
         self.geoip_manager = GeoIPManager()
+        
+        # Deduplication Cache: { flow_hash: Alert }
+        self.flow_cache = {}
+        self.cache_lock = threading.Lock()
 
     def run(self):
         print(f"[*] Starting network sniffer on {self.interface}...")
@@ -66,6 +70,40 @@ class SnifferThread(threading.Thread):
                     pass
             self.geoip_manager.close()
 
+    def is_noise(self, dst_ip, dst_port, protocol):
+        """Identifies mDNS, SSDP, Broadcast, and Multicast traffic."""
+        # Broadcast/Multicast IPs
+        if dst_ip == "255.255.255.255" or dst_ip.startswith("224.") or dst_ip.startswith("239."):
+            return True
+        
+        # Local Noise Ports
+        noise_ports = {5353, 5355, 1900} # mDNS, LLMNR, SSDP
+        if dst_port in noise_ports:
+            return True
+            
+        return False
+
+    def emit_alert(self, alert: Alert):
+        """Handles temporal aggregation before pushing to queue."""
+        if not self.app_state.aggregation_enabled:
+            self.alert_queue.put(alert)
+            return
+
+        h = alert.flow_hash
+        with self.cache_lock:
+            if h in self.flow_cache:
+                stored = self.flow_cache[h]
+                # Check window (5 seconds)
+                if (alert.timestamp - stored.timestamp).total_seconds() < 5:
+                    stored.count += 1
+                    # In this simple implementation, we push the updated alert
+                    # The UI will recognize the hash and update the line instead of adding
+                    self.alert_queue.put(alert)
+                    return
+            
+            self.flow_cache[h] = alert
+            self.alert_queue.put(alert)
+
     def process_packet(self, packet):
         try:
             if 'IP' in packet:
@@ -86,55 +124,44 @@ class SnifferThread(threading.Thread):
                     dst_port = int(packet.udp.dstport)
                     src_port = int(packet.udp.srcport)
                 
-                # Get Process Info (We look up the LOCAL source port for outbound)
-                # Important: packet capture sees traffic. Outbound traffic has ephemeral source port.
+                # Noise Filtering
+                if self.app_state.hide_local_noise and self.is_noise(dst_ip, dst_port, protocol):
+                    return
+
+                # Get Intelligence
                 pid, process_name = self.process_mapper.get_process(src_port, protocol)
-                
-                # Get GeoIP Info
+                process_name = process_name or "System"
                 country = self.geoip_manager.lookup(dst_ip)
                 
-                # Check for Port 80 (HTTP)
-                if dst_port == 80:
-                    sender = f"{process_name} ({pid})" if pid else "Unknown Process"
-                    country_str = f" to {country}" if country != "Unknown" else ""
-                    
-                    alert = Alert(
-                        timestamp=datetime.now(),
-                        alert_type="Network",
-                        severity="Medium",
-                        source="Sniffer",
-                        message=f"Unencrypted HTTP traffic from {sender}{country_str}",
-                        src_ip=src_ip,
-                        dst_ip=dst_ip,
-                        dst_port=dst_port,
-                        process_name=process_name,
-                        process_id=pid,
-                        country=country
-                    )
-                    self.alert_queue.put(alert)
-                    return # Avoid double logging if Audit Mode is on
+                timestamp = datetime.now()
+                severity = "Info"
+                alert_type = "Traffic"
+                message = f"Outbound {protocol}"
 
-                # Audit All Mode (Real-time Streaming)
-                if self.app_state.show_all_traffic:
-                    sender = f"{process_name} ({pid})" if pid else "Unknown"
-                    msg = f"Traffic: {sender} -> {dst_ip} ({country}) [{protocol}/{dst_port}]"
+                # Security Rule: Port 80
+                if dst_port == 80:
+                    severity = "Warning"
+                    alert_type = "Network"
+                    message = "Unencrypted HTTP"
+                
+                alert = Alert(
+                    timestamp=timestamp,
+                    alert_type=alert_type,
+                    severity=severity,
+                    source="Sniffer",
+                    message=message,
+                    src_ip=src_ip,
+                    dst_ip=dst_ip,
+                    dst_port=dst_port,
+                    process_name=process_name,
+                    process_id=pid,
+                    country=country
+                )
+
+                if self.app_state.show_all_traffic or alert_type == "Network":
+                    self.emit_alert(alert)
                     
-                    alert = Alert(
-                        timestamp=datetime.now(),
-                        alert_type="Traffic",
-                        severity="Info",
-                        source="Sniffer",
-                        message=msg,
-                        src_ip=src_ip,
-                        dst_ip=dst_ip,
-                        dst_port=dst_port,
-                        process_name=process_name,
-                        process_id=pid,
-                        country=country
-                    )
-                    self.alert_queue.put(alert)
-                    
-        except Exception as e:
+        except Exception:
             pass
 
     def stop(self):

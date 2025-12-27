@@ -121,6 +121,8 @@ class SnifferThread(threading.Thread):
             self.db_manager.save_alert(alert)
 
     def process_packet(self, packet):
+        if not self.app_state.monitoring_active:
+            return
         try:
             if 'IP' in packet:
                 src_ip = packet.ip.src

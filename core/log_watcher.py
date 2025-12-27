@@ -54,6 +54,10 @@ class LogWatcherThread(threading.Thread):
                 pass
 
             while self.running:
+                if not self.app_state.monitoring_active:
+                    time.sleep(1)
+                    continue
+                    
                 # This is a stub for the complex logic needed to correctly tail the Windows Event Log reliably without re-reading everything.
                 # Properly doing this requires saving the last RecordNumber.
                 

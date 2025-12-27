@@ -42,6 +42,13 @@ class SentinelDashboard(ctk.CTk):
         
         self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs", command=lambda: self.switch_view("System Event Logs"))
         self.btn_system.grid(row=3, column=0, padx=20, pady=10)
+
+        # Monitoring Controls
+        self.status_lbl = ctk.CTkLabel(self.sidebar_frame, text="STATUS: PAUSED", text_color="orange", font=ctk.CTkFont(weight="bold"))
+        self.status_lbl.grid(row=4, column=0, padx=20, pady=(20, 5))
+
+        self.btn_start = ctk.CTkButton(self.sidebar_frame, text="Start Monitoring", fg_color="green", hover_color="darkgreen", command=self.toggle_monitoring)
+        self.btn_start.grid(row=5, column=0, padx=20, pady=5)
         
         # Controls
         self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
@@ -49,11 +56,11 @@ class SentinelDashboard(ctk.CTk):
         
         self.chk_noise = ctk.CTkCheckBox(self.sidebar_frame, text="Hide Local Noise", command=self.toggle_noise)
         self.chk_noise.select() # Default on
-        self.chk_noise.grid(row=5, column=0, padx=20, pady=5)
+        self.chk_noise.grid(row=7, column=0, padx=20, pady=5)
         
         self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Dedup. Mode", command=self.toggle_aggr)
         self.chk_aggr.select() # Default on
-        self.chk_aggr.grid(row=6, column=0, padx=20, pady=5)
+        self.chk_aggr.grid(row=8, column=0, padx=20, pady=5)
 
         self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="red", hover_color="darkred", command=self.clear_logs)
         self.btn_clear.grid(row=7, column=0, padx=20, pady=(20, 10))
@@ -158,6 +165,17 @@ class SentinelDashboard(ctk.CTk):
 
     def toggle_aggr(self):
         self.app_state.aggregation_enabled = bool(self.chk_aggr.get())
+
+    def toggle_monitoring(self):
+        self.app_state.monitoring_active = not self.app_state.monitoring_active
+        if self.app_state.monitoring_active:
+            self.btn_start.configure(text="Pause Monitoring", fg_color="orange", hover_color="darkorange")
+            self.status_lbl.configure(text="STATUS: RUNNING", text_color="green")
+            self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", "Monitoring STARTED"))
+        else:
+            self.btn_start.configure(text="Start Monitoring", fg_color="green", hover_color="darkgreen")
+            self.status_lbl.configure(text="STATUS: PAUSED", text_color="orange")
+            self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", "Monitoring PAUSED"))
 
     def clear_logs(self):
         # Clear the active view

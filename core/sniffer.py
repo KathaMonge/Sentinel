@@ -17,10 +17,10 @@ class SnifferThread(threading.Thread):
     def run(self):
         print(f"[*] Starting network sniffer on {self.interface}...")
         
-        # PyShark LiveCapture requires an asyncio loop if used in a way that blocks, 
-        # but iterating over it is synchronous-like in a thread.
-        # We need to handle the event loop if pyshark complains.
-        # For simple iteration:
+        # PyShark LiveCapture uses asyncio. In a new thread, there is no default loop.
+        # We must create and set one.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         
         try:
             # display_filter to capture only interesting traffic (TCP/UDP)

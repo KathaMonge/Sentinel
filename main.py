@@ -8,6 +8,13 @@ from core.models import Alert
 from core.sniffer import SnifferThread
 from core.log_watcher import LogWatcherThread
 from ui.dashboard import start_gui
+import ctypes
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
 
 def get_active_interface():
     """Simple heuristic to find an active interface (has an IP)."""
@@ -26,6 +33,10 @@ def get_active_interface():
 
 def main():
     print(f"[{datetime.now()}] SentinelHIDS starting...")
+    
+    if not is_admin():
+        print("[!] WARNING: Not running as Administrator. Packet capture and Security Log reading will likely fail.")
+        print("[!] Please run this terminal as Administrator.")
     
     # 1. Initialize the thread-safe queue for alerts
     alert_queue = queue.Queue()

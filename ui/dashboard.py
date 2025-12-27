@@ -27,43 +27,53 @@ class SentinelDashboard(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         
         # Sidebar
-        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(self, width=240, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(6, weight=1) # Spacer push down
+        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Dynamic spacer
         
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SentinelHIDS", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
+        # Section: Views
+        self.lbl_views = ctk.CTkLabel(self.sidebar_frame, text="SERVICES", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_views.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="w")
+
         self.btn_overview = ctk.CTkButton(self.sidebar_frame, text="Overview", command=lambda: self.switch_view("Overview"))
-        self.btn_overview.grid(row=1, column=0, padx=20, pady=10)
+        self.btn_overview.grid(row=2, column=0, padx=20, pady=5)
         
         self.btn_network = ctk.CTkButton(self.sidebar_frame, text="Network Monitor", command=lambda: self.switch_view("Network Monitoring"))
-        self.btn_network.grid(row=2, column=0, padx=20, pady=10)
+        self.btn_network.grid(row=3, column=0, padx=20, pady=5)
         
         self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs", command=lambda: self.switch_view("System Event Logs"))
-        self.btn_system.grid(row=3, column=0, padx=20, pady=10)
+        self.btn_system.grid(row=4, column=0, padx=20, pady=5)
 
-        # Monitoring Controls
+        # Section: Monitoring
+        self.lbl_mon = ctk.CTkLabel(self.sidebar_frame, text="MONITORING", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_mon.grid(row=5, column=0, padx=20, pady=(20, 0), sticky="w")
+
         self.status_lbl = ctk.CTkLabel(self.sidebar_frame, text="STATUS: PAUSED", text_color="orange", font=ctk.CTkFont(weight="bold"))
-        self.status_lbl.grid(row=4, column=0, padx=20, pady=(20, 5))
+        self.status_lbl.grid(row=6, column=0, padx=20, pady=0)
 
         self.btn_start = ctk.CTkButton(self.sidebar_frame, text="Start Monitoring", fg_color="green", hover_color="darkgreen", command=self.toggle_monitoring)
-        self.btn_start.grid(row=5, column=0, padx=20, pady=5)
+        self.btn_start.grid(row=7, column=0, padx=20, pady=10)
         
-        # Controls
+        # Section: Options (Pinned to bottom via Row 8 spacer)
+        self.lbl_opts = ctk.CTkLabel(self.sidebar_frame, text="OPTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_opts.grid(row=9, column=0, padx=20, pady=(10, 0), sticky="w")
+
         self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
-        self.chk_audit.grid(row=4, column=0, padx=20, pady=(10, 5))
+        self.chk_audit.grid(row=10, column=0, padx=20, pady=5)
         
         self.chk_noise = ctk.CTkCheckBox(self.sidebar_frame, text="Hide Local Noise", command=self.toggle_noise)
-        self.chk_noise.select() # Default on
-        self.chk_noise.grid(row=7, column=0, padx=20, pady=5)
+        self.chk_noise.select()
+        self.chk_noise.grid(row=11, column=0, padx=20, pady=5)
         
         self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Dedup. Mode", command=self.toggle_aggr)
-        self.chk_aggr.select() # Default on
-        self.chk_aggr.grid(row=8, column=0, padx=20, pady=5)
+        self.chk_aggr.select()
+        self.chk_aggr.grid(row=12, column=0, padx=20, pady=5)
 
-        self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="red", hover_color="darkred", command=self.clear_logs)
-        self.btn_clear.grid(row=7, column=0, padx=20, pady=(20, 10))
+        self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="#444", hover_color="red", command=self.clear_logs)
+        self.btn_clear.grid(row=13, column=0, padx=20, pady=(10, 20))
 
         # Main Content Area
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -130,14 +140,14 @@ class SentinelDashboard(ctk.CTk):
             self.add_alert(alert)
 
     def _create_stat_card(self, parent, title, value, col, color):
-        frame = ctk.CTkFrame(parent, height=150, fg_color=("#333333", "#2b2b2b")) # Card background
-        frame.grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
+        frame = ctk.CTkFrame(parent, height=150, corner_radius=10, border_width=2, border_color="#333", fg_color=("#333333", "#1a1a1a"))
+        frame.grid(row=0, column=col, padx=15, pady=15, sticky="nsew")
         
-        lbl_title = ctk.CTkLabel(frame, text=title, font=("Arial", 14), text_color="silver")
-        lbl_title.pack(pady=(20, 5))
+        lbl_title = ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=14, weight="bold"), text_color="gray")
+        lbl_title.pack(pady=(25, 5))
         
-        lbl_val = ctk.CTkLabel(frame, text=value, font=("Arial", 32, "bold"), text_color=color)
-        lbl_val.pack(pady=10)
+        lbl_val = ctk.CTkLabel(frame, text=value, font=ctk.CTkFont(size=36, weight="bold"), text_color=color)
+        lbl_val.pack(pady=(0, 25))
         
         return lbl_val
 

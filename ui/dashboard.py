@@ -5,13 +5,15 @@ from datetime import datetime
 from core.models import Alert
 
 from core.state import AppState
+from core.database import DatabaseManager
 
 class SentinelDashboard(ctk.CTk):
-    def __init__(self, alert_queue: queue.Queue, app_state: AppState):
+    def __init__(self, alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
         super().__init__()
         
         self.alert_queue = alert_queue
         self.app_state = app_state
+        self.db_manager = db_manager
         self.last_hash = None # Track top line for deduplication
         
         # Window setup
@@ -25,36 +27,60 @@ class SentinelDashboard(ctk.CTk):
         self.grid_rowconfigure(0, weight=1)
         
         # Sidebar
-        self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(self, width=240, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(6, weight=1) # Spacer push down
         
+        # Logo
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SentinelHIDS", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
+        row_idx = 1
+        
+        # Section: Views
+        self.lbl_v = ctk.CTkLabel(self.sidebar_frame, text="SERVICES", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_v.grid(row=row_idx, column=0, padx=20, pady=(10, 0), sticky="w"); row_idx += 1
+        
         self.btn_overview = ctk.CTkButton(self.sidebar_frame, text="Overview", command=lambda: self.switch_view("Overview"))
-        self.btn_overview.grid(row=1, column=0, padx=20, pady=10)
+        self.btn_overview.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
         
         self.btn_network = ctk.CTkButton(self.sidebar_frame, text="Network Monitor", command=lambda: self.switch_view("Network Monitoring"))
-        self.btn_network.grid(row=2, column=0, padx=20, pady=10)
+        self.btn_network.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
         
         self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs", command=lambda: self.switch_view("System Event Logs"))
-        self.btn_system.grid(row=3, column=0, padx=20, pady=10)
+        self.btn_system.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
+
+        # Section: Monitoring
+        self.lbl_m = ctk.CTkLabel(self.sidebar_frame, text="MONITORING", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_mon_offset = 5 # Used to identify the section start
+        self.lbl_m.grid(row=row_idx, column=0, padx=20, pady=(20, 0), sticky="w"); row_idx += 1
+
+        self.status_lbl = ctk.CTkLabel(self.sidebar_frame, text="STATUS: PAUSED", text_color="orange", font=ctk.CTkFont(weight="bold"))
+        self.status_lbl.grid(row=row_idx, column=0, padx=20, pady=0, sticky="ew"); row_idx += 1
+
+        self.btn_start = ctk.CTkButton(self.sidebar_frame, text="Start Monitoring", fg_color="green", hover_color="darkgreen", command=self.toggle_monitoring)
+        self.btn_start.grid(row=row_idx, column=0, padx=20, pady=10, sticky="ew"); row_idx += 1
         
-        # Controls
+        # Spacer
+        self.sidebar_frame.grid_rowconfigure(row_idx, weight=1)
+        row_idx += 1
+        
+        # Section: Options
+        self.lbl_o = ctk.CTkLabel(self.sidebar_frame, text="OPTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_o.grid(row=row_idx, column=0, padx=20, pady=(10, 0), sticky="w"); row_idx += 1
+
         self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
-        self.chk_audit.grid(row=4, column=0, padx=20, pady=(10, 5))
+        self.chk_audit.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
         
         self.chk_noise = ctk.CTkCheckBox(self.sidebar_frame, text="Hide Local Noise", command=self.toggle_noise)
-        self.chk_noise.select() # Default on
-        self.chk_noise.grid(row=5, column=0, padx=20, pady=5)
+        self.chk_noise.select()
+        self.chk_noise.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
         
         self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Dedup. Mode", command=self.toggle_aggr)
-        self.chk_aggr.select() # Default on
-        self.chk_aggr.grid(row=6, column=0, padx=20, pady=5)
+        self.chk_aggr.select()
+        self.chk_aggr.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
 
-        self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="red", hover_color="darkred", command=self.clear_logs)
-        self.btn_clear.grid(row=7, column=0, padx=20, pady=(20, 10))
+        self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="#444", hover_color="red", command=self.clear_logs)
+        self.btn_clear.grid(row=row_idx, column=0, padx=20, pady=(10, 20), sticky="ew")
 
         # Main Content Area
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -110,18 +136,25 @@ class SentinelDashboard(ctk.CTk):
         # self.network_frame.pack(fill="both", expand=True) # Old default
         
         # Start loops
+        self.load_historical_data()
         self.check_queue()
         self.update_stats()
 
+    def load_historical_data(self):
+        """Load recent alerts from database into the UI."""
+        alerts = self.db_manager.get_recent_alerts(limit=100)
+        for alert in alerts:
+            self.add_alert(alert)
+
     def _create_stat_card(self, parent, title, value, col, color):
-        frame = ctk.CTkFrame(parent, height=150, fg_color=("#333333", "#2b2b2b")) # Card background
-        frame.grid(row=0, column=col, padx=10, pady=10, sticky="nsew")
+        frame = ctk.CTkFrame(parent, height=150, corner_radius=10, border_width=2, border_color="#333", fg_color=("#333333", "#1a1a1a"))
+        frame.grid(row=0, column=col, padx=15, pady=15, sticky="nsew")
         
-        lbl_title = ctk.CTkLabel(frame, text=title, font=("Arial", 14), text_color="silver")
-        lbl_title.pack(pady=(20, 5))
+        lbl_title = ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=14, weight="bold"), text_color="gray")
+        lbl_title.pack(pady=(25, 5))
         
-        lbl_val = ctk.CTkLabel(frame, text=value, font=("Arial", 32, "bold"), text_color=color)
-        lbl_val.pack(pady=10)
+        lbl_val = ctk.CTkLabel(frame, text=value, font=ctk.CTkFont(size=36, weight="bold"), text_color=color)
+        lbl_val.pack(pady=(0, 25))
         
         return lbl_val
 
@@ -149,6 +182,17 @@ class SentinelDashboard(ctk.CTk):
 
     def toggle_aggr(self):
         self.app_state.aggregation_enabled = bool(self.chk_aggr.get())
+
+    def toggle_monitoring(self):
+        self.app_state.monitoring_active = not self.app_state.monitoring_active
+        if self.app_state.monitoring_active:
+            self.btn_start.configure(text="Pause Monitoring", fg_color="orange", hover_color="darkorange")
+            self.status_lbl.configure(text="STATUS: RUNNING", text_color="green")
+            self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", "Monitoring STARTED"))
+        else:
+            self.btn_start.configure(text="Start Monitoring", fg_color="green", hover_color="darkgreen")
+            self.status_lbl.configure(text="STATUS: PAUSED", text_color="orange")
+            self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", "Monitoring PAUSED"))
 
     def clear_logs(self):
         # Clear the active view
@@ -210,16 +254,28 @@ class SentinelDashboard(ctk.CTk):
             geo = (alert.country or "-")[:3].ljust(3)
             msg = alert.message[:35].ljust(35)
             cnt = f"[x{alert.count}]" if alert.count > 1 else "    "
-            lat = f"{latency_ms:3.0f}ms"
+            
+            # Latency logic: Only show for live packets (< 5s old)
+            time_diff = (display_time - alert.timestamp).total_seconds()
+            if time_diff > 5:
+                lat = "  -  " # Placeholder for historical data
+            else:
+                lat = f"{latency_ms:3.0f}ms"
 
             formatted_line = f"[{t_str}] {proc} {dest} {port} {geo} {msg} {lat} {cnt}\n"
             
-            # Deduplication relies on the hash matching the last inserted line IN THIS LOG
-            # simpler approach: we won't strictly dedup the UI line here to avoid complexity with switching views
-            # or we rely on the backend not sending it unless count > 1
-            
             target_log.configure(state="normal")
+            
+            # Temporal Aggregation UI logic: 
+            # If the new alert has the SAME flow_hash as the LAST one added, 
+            # and Dedup is enabled, replace the top line instead of adding a new one.
+            h = alert.flow_hash
+            if self.app_state.aggregation_enabled and self.last_hash == h:
+                 # Delete the top line (1.0 to 2.0)
+                 target_log.delete("1.0", "2.0")
+            
             target_log.insert("1.0", formatted_line, alert.severity)
+            self.last_hash = h
             
             # Truncate
             if float(target_log.index("end-1c")) > 500:
@@ -239,7 +295,27 @@ class SentinelDashboard(ctk.CTk):
             target_log.configure(state="normal")
             target_log.insert("1.0", formatted_line, alert.severity)
             target_log.configure(state="disabled")
+            
+        # Global Alert Feedback
+        if alert.severity in ["Warning", "Critical"]:
+            self._flash_alert_status()
 
-def start_gui(alert_queue: queue.Queue, app_state: AppState):
-    app = SentinelDashboard(alert_queue, app_state)
+    def _flash_alert_status(self):
+        """Briefly change status label to show alert detection."""
+        prev_text = self.status_lbl.cget("text")
+        prev_color = self.status_lbl.cget("text_color")
+        
+        self.status_lbl.configure(text="ALERT DETECTED!", text_color="red")
+        
+        # Schedule reset
+        def reset():
+            if self.app_state.monitoring_active:
+                self.status_lbl.configure(text="STATUS: RUNNING", text_color="green")
+            else:
+                self.status_lbl.configure(text="STATUS: PAUSED", text_color="orange")
+        
+        self.after(3000, reset)
+
+def start_gui(alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
+    app = SentinelDashboard(alert_queue, app_state, db_manager)
     app.mainloop()

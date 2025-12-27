@@ -7,11 +7,15 @@ import win32api # type: ignore
 from datetime import datetime
 from core.models import Alert
 import queue
+from core.database import DatabaseManager
+from core.state import AppState
 
 class LogWatcherThread(threading.Thread):
-    def __init__(self, alert_queue: queue.Queue):
+    def __init__(self, alert_queue: queue.Queue, db_manager: DatabaseManager, app_state: AppState):
         super().__init__()
         self.alert_queue = alert_queue
+        self.db_manager = db_manager
+        self.app_state = app_state
         self.running = True
         self.daemon = True
         
@@ -19,13 +23,15 @@ class LogWatcherThread(threading.Thread):
         print("[*] Starting System Log Watcher...")
         
         # Feedback alert
-        self.alert_queue.put(Alert(
+        init_alert = Alert(
             timestamp=datetime.now(),
             alert_type="System",
             severity="Info",
             source="LogWatcher",
             message="System log monitoring initialized."
-        ))
+        )
+        self.alert_queue.put(init_alert)
+        self.db_manager.save_alert(init_alert)
         
         server = 'localhost'
         log_type = 'Security'
@@ -50,6 +56,10 @@ class LogWatcherThread(threading.Thread):
                 pass
 
             while self.running:
+                if not self.app_state.monitoring_active:
+                    time.sleep(1)
+                    continue
+                    
                 # This is a stub for the complex logic needed to correctly tail the Windows Event Log reliably without re-reading everything.
                 # Properly doing this requires saving the last RecordNumber.
                 
@@ -68,7 +78,10 @@ class LogWatcherThread(threading.Thread):
                 
         except Exception as e:
             print(f"[!] Log Watcher failed/access denied: {e}")
-            self.alert_queue.put(Alert(datetime.now(), "System", "Info", "LogWatcher", f"Could not access Security Log (Run as Admin?): {e}"))
+            err_alert = Alert(datetime.now(), "System", "Info", "LogWatcher", f"Could not access Security Log (Run as Admin?): {e}")
+            self.alert_queue.put(err_alert)
+            self.db_manager.save_alert(err_alert)
+            self.db_manager.log_security_event(err_alert)
 
     def stop(self):
         self.running = False

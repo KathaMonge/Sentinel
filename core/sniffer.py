@@ -6,24 +6,28 @@ from core.models import Alert
 import queue
 import asyncio
 
+from core.process_mapper import ProcessMapper
+from core.geoip_manager import GeoIPManager
+
 class SnifferThread(threading.Thread):
     def __init__(self, interface: str, alert_queue: queue.Queue):
         super().__init__()
         self.interface = interface
         self.alert_queue = alert_queue
         self.running = True
-        self.daemon = True # Daemonize to kill when main exits
+        self.daemon = True 
+        
+        # Initialize Intelligence Modules
+        self.process_mapper = ProcessMapper()
+        self.geoip_manager = GeoIPManager()
 
     def run(self):
         print(f"[*] Starting network sniffer on {self.interface}...")
         
-        # PyShark LiveCapture uses asyncio. In a new thread, there is no default loop.
-        # We must create and set one.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         try:
-            # display_filter to capture only interesting traffic (TCP/UDP)
             self.capture = pyshark.LiveCapture(interface=self.interface, display_filter='ip')
             
             # Send an initial alert to confirm sniffer is working
@@ -57,48 +61,56 @@ class SnifferThread(threading.Thread):
                     self.capture.close()
                 except:
                     pass
+            self.geoip_manager.close()
 
     def process_packet(self, packet):
         try:
-            # Basic info extraction
-            # This depends heavily on packet layers present (IP, TCP, UDP, etc.)
-            
             if 'IP' in packet:
                 src_ip = packet.ip.src
                 dst_ip = packet.ip.dst
                 
-                # Filter out loopback for now if desired
                 if src_ip == "127.0.0.1" or src_ip == "::1":
                     return
 
-                # Check layers
-                protocol = packet.transport_layer # e.g. TCP or UDP
+                protocol = packet.transport_layer 
                 dst_port = 0
+                src_port = 0
                 
                 if protocol == 'TCP':
                     dst_port = int(packet.tcp.dstport)
+                    src_port = int(packet.tcp.srcport)
                 elif protocol == 'UDP':
                     dst_port = int(packet.udp.dstport)
+                    src_port = int(packet.udp.srcport)
                 
-                # Check for Port 80 (HTTP) as per requirements
+                # Get Process Info (We look up the LOCAL source port for outbound)
+                # Important: packet capture sees traffic. Outbound traffic has ephemeral source port.
+                pid, process_name = self.process_mapper.get_process(src_port, protocol)
+                
+                # Get GeoIP Info
+                country = self.geoip_manager.lookup(dst_ip)
+                
+                # Check for Port 80 (HTTP)
                 if dst_port == 80:
+                    sender = f"{process_name} ({pid})" if pid else "Unknown Process"
+                    country_str = f" to {country}" if country != "Unknown" else ""
+                    
                     alert = Alert(
                         timestamp=datetime.now(),
                         alert_type="Network",
                         severity="Medium",
                         source="Sniffer",
-                        message=f"Unencrypted HTTP traffic detected to {dst_ip}",
+                        message=f"Unencrypted HTTP traffic from {sender}{country_str}",
                         src_ip=src_ip,
                         dst_ip=dst_ip,
-                        dst_port=dst_port
+                        dst_port=dst_port,
+                        process_name=process_name,
+                        process_id=pid,
+                        country=country
                     )
                     self.alert_queue.put(alert)
                     
-                # TODO: GeoIP lookup here
-                # TODO: Process mapping here
-                
         except Exception as e:
-            # Packet parsing error, ignore
             pass
 
     def stop(self):

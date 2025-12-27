@@ -10,6 +10,8 @@ from core.log_watcher import LogWatcherThread
 from ui.dashboard import start_gui
 import ctypes
 
+from core.state import AppState
+
 def is_admin():
     try:
         return ctypes.windll.shell32.IsUserAnAdmin()
@@ -41,7 +43,10 @@ def main():
     # 1. Initialize the thread-safe queue for alerts
     alert_queue = queue.Queue()
     
-    # 2. Setup Background Threads
+    # 2. Shared Application State
+    app_state = AppState()
+    
+    # 3. Setup Background Threads
     # Find interface
     interface = get_active_interface()
     sniffer_thread = None
@@ -51,7 +56,7 @@ def main():
         print(f"[*] Detected active interface: {interface}")
         # Note: PyShark on Windows sometimes needs specific adapter names. 
         # If 'Ethernet' fails, might need to list from tshark -D.
-        sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue)
+        sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue, app_state=app_state)
         sniffer_thread.start()
     else:
         print("[!] No active non-loopback interface found. Sniffer will not start.")
@@ -65,10 +70,10 @@ def main():
     # Diagnostic alert
     alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", "Queue-to-GUI communication test."))
 
-    # 3. Start GUI (Blocks this thread until closed)
+    # 4. Start GUI (Blocks this thread until closed)
     print("Starting GUI...")
     try:
-        start_gui(alert_queue)
+        start_gui(alert_queue, app_state)
     except KeyboardInterrupt:
         print("[*] Keyboard Interrupt received.")
     except Exception as e:

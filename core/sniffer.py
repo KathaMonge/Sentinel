@@ -9,11 +9,14 @@ import asyncio
 from core.process_mapper import ProcessMapper
 from core.geoip_manager import GeoIPManager
 
+from core.state import AppState
+
 class SnifferThread(threading.Thread):
-    def __init__(self, interface: str, alert_queue: queue.Queue):
+    def __init__(self, interface: str, alert_queue: queue.Queue, app_state: AppState):
         super().__init__()
         self.interface = interface
         self.alert_queue = alert_queue
+        self.app_state = app_state
         self.running = True
         self.daemon = True 
         
@@ -101,6 +104,27 @@ class SnifferThread(threading.Thread):
                         severity="Medium",
                         source="Sniffer",
                         message=f"Unencrypted HTTP traffic from {sender}{country_str}",
+                        src_ip=src_ip,
+                        dst_ip=dst_ip,
+                        dst_port=dst_port,
+                        process_name=process_name,
+                        process_id=pid,
+                        country=country
+                    )
+                    self.alert_queue.put(alert)
+                    return # Avoid double logging if streaming is on
+
+                # Real-time Streaming (if enabled)
+                if self.app_state.show_all_traffic:
+                    sender = f"{process_name} ({pid})" if pid else "Unknown"
+                    msg = f"Traffic: {sender} -> {dst_ip} ({country}) [{protocol}/{dst_port}]"
+                    
+                    alert = Alert(
+                        timestamp=datetime.now(),
+                        alert_type="Traffic",
+                        severity="Info",
+                        source="Sniffer",
+                        message=msg,
                         src_ip=src_ip,
                         dst_ip=dst_ip,
                         dst_port=dst_port,

@@ -11,6 +11,7 @@ from ui.dashboard import start_gui
 import ctypes
 
 from core.state import AppState
+from core.database import DatabaseManager
 
 def is_admin():
     try:
@@ -52,11 +53,14 @@ def main():
     sniffer_thread = None
     log_thread = None
     
+    # Database Manager
+    db_manager = DatabaseManager("data/alerts.db")
+    
     if interface:
         print(f"[*] Detected active interface: {interface}")
         # Note: PyShark on Windows sometimes needs specific adapter names. 
         # If 'Ethernet' fails, might need to list from tshark -D.
-        sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue, app_state=app_state)
+        sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue, app_state=app_state, db_manager=db_manager)
         sniffer_thread.start()
     else:
         print("[!] No active non-loopback interface found. Sniffer will not start.")
@@ -64,7 +68,7 @@ def main():
         alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "No network interface detected."))
 
     # Start Log Watcher
-    log_thread = LogWatcherThread(alert_queue)
+    log_thread = LogWatcherThread(alert_queue, db_manager)
     log_thread.start()
 
     # Diagnostic alert

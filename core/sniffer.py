@@ -10,13 +10,15 @@ from core.process_mapper import ProcessMapper
 from core.geoip_manager import GeoIPManager
 
 from core.state import AppState
+from core.database import DatabaseManager
 
 class SnifferThread(threading.Thread):
-    def __init__(self, interface: str, alert_queue: queue.Queue, app_state: AppState):
+    def __init__(self, interface: str, alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
         super().__init__()
         self.interface = interface
         self.alert_queue = alert_queue
         self.app_state = app_state
+        self.db_manager = db_manager
         self.running = True
         self.daemon = True 
         
@@ -93,9 +95,10 @@ class SnifferThread(threading.Thread):
         return False
 
     def emit_alert(self, alert: Alert):
-        """Handles temporal aggregation before pushing to queue."""
+        """Handles temporal aggregation before pushing to queue and database."""
         if not self.app_state.aggregation_enabled:
             self.alert_queue.put(alert)
+            self.db_manager.save_alert(alert)
             return
 
         h = alert.flow_hash
@@ -108,10 +111,14 @@ class SnifferThread(threading.Thread):
                     # In this simple implementation, we push the updated alert
                     # The UI will recognize the hash and update the line instead of adding
                     self.alert_queue.put(alert)
+                    # For performance, we don't save every deduplicated packet to DB 
+                    # unless it's a significant milestone or when flushed.
+                    # For now, we'll just save the initial one.
                     return
             
             self.flow_cache[h] = alert
             self.alert_queue.put(alert)
+            self.db_manager.save_alert(alert)
 
     def process_packet(self, packet):
         try:

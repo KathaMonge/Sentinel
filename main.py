@@ -77,7 +77,7 @@ def main():
     # 4. Start GUI (Blocks this thread until closed)
     print("Starting GUI...")
     try:
-        start_gui(alert_queue, app_state)
+        start_gui(alert_queue, app_state, db_manager)
     except KeyboardInterrupt:
         print("[*] Keyboard Interrupt received.")
     except Exception as e:

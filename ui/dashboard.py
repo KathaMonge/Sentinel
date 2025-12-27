@@ -5,13 +5,15 @@ from datetime import datetime
 from core.models import Alert
 
 from core.state import AppState
+from core.database import DatabaseManager
 
 class SentinelDashboard(ctk.CTk):
-    def __init__(self, alert_queue: queue.Queue, app_state: AppState):
+    def __init__(self, alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
         super().__init__()
         
         self.alert_queue = alert_queue
         self.app_state = app_state
+        self.db_manager = db_manager
         self.last_hash = None # Track top line for deduplication
         
         # Window setup
@@ -110,8 +112,15 @@ class SentinelDashboard(ctk.CTk):
         # self.network_frame.pack(fill="both", expand=True) # Old default
         
         # Start loops
+        self.load_historical_data()
         self.check_queue()
         self.update_stats()
+
+    def load_historical_data(self):
+        """Load recent alerts from database into the UI."""
+        alerts = self.db_manager.get_recent_alerts(limit=100)
+        for alert in alerts:
+            self.add_alert(alert)
 
     def _create_stat_card(self, parent, title, value, col, color):
         frame = ctk.CTkFrame(parent, height=150, fg_color=("#333333", "#2b2b2b")) # Card background
@@ -240,6 +249,6 @@ class SentinelDashboard(ctk.CTk):
             target_log.insert("1.0", formatted_line, alert.severity)
             target_log.configure(state="disabled")
 
-def start_gui(alert_queue: queue.Queue, app_state: AppState):
-    app = SentinelDashboard(alert_queue, app_state)
+def start_gui(alert_queue: queue.Queue, app_state: AppState, db_manager: DatabaseManager):
+    app = SentinelDashboard(alert_queue, app_state, db_manager)
     app.mainloop()

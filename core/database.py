@@ -66,3 +66,38 @@ class DatabaseManager:
                 conn.close()
             except Exception as e:
                 print(f"[!] Database error: {e}")
+
+    def get_recent_alerts(self, limit=100):
+        """Retrieve the most recent alerts from the database."""
+        alerts = []
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT timestamp, alert_type, severity, source, message,
+                           src_ip, dst_ip, dst_port, process_name, process_id,
+                           country, hit_count
+                    FROM alerts ORDER BY id DESC LIMIT ?
+                ''', (limit,))
+                rows = cursor.fetchall()
+                for row in reversed(rows): # Return in chronological order
+                    alert = Alert(
+                        timestamp=datetime.fromisoformat(row[0]),
+                        alert_type=row[1],
+                        severity=row[2],
+                        source=row[3],
+                        message=row[4],
+                        src_ip=row[5],
+                        dst_ip=row[6],
+                        dst_port=row[7],
+                        process_name=row[8],
+                        process_id=row[9],
+                        country=row[10],
+                        count=row[11]
+                    )
+                    alerts.append(alert)
+                conn.close()
+            except Exception as e:
+                print(f"[!] Database retrieval error: {e}")
+        return alerts

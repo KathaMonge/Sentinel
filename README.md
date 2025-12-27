@@ -7,15 +7,18 @@ SentinelHIDS is a lightweight, host-based intrusion detection system designed fo
 ## Features
 
 - **Operational Intelligence**: Real-time stats dashboard showing packet counts, filtered noise, and security alerts.
+- **Session Persistence**: Stores all alerts in a local SQLite database, allowing for historical review upon application restart.
+- **Monitoring Controls**: One-click "Start/Pause" monitoring with clear visual status indicators.
 - **Network Monitoring & Enrichment**:
   - **Process Mapping**: Correlates outbound traffic to specific Windows executables (e.g., `chrome.exe`).
-  - **GeoIP Integration**: Resolves destination IPs to country codes using the MaxMind GeoLite2 database.
-  - **Unencrypted Traffic Detection**: Flags unencrypted HTTP (Port 80) connections.
+  - **GeoIP Integration**: Resolves destination IPs to country codes using MaxMind.
+  - **Unencrypted Traffic Detection**: Flags Port 80 (HTTP) connections as security warnings.
+- **Security Audit Logging**: High-severity alerts are automatically exported to a dedicated `security_alerts.log` file.
 - **Log Intelligence**:
-  - **Temporal Aggregation**: Deduplicates repetitive high-frequency flows with a [xN] hit counter.
-  - **Semantic Noise Suppression**: Automatically filters mDNS, SSDP, LLMNR, and multicast background noise.
-- **System Event Monitoring**: Watches Windows Security Logs for failed logins and privilege escalations.
-- **Local-First Privacy**: Operates entirely offline; no telemetry or data ever leaves the host.
+  - **Temporal Aggregation**: Deduplicates repetitive high-frequency flows with a hit counter.
+  - **Semantic Noise Suppression**: Automatically filters background noise (mDNS, SSDP, LLMNR).
+- **System Event Monitoring**: Watches Windows Security Logs for potential system-level threats.
+- **Local-First Privacy**: Operates entirely offline; no data ever leaves the host.
 
 ## Architecture
 
@@ -24,17 +27,19 @@ graph TD
     A[Network Sniffer] -->|Packet Data| D[Queue]
     B[Log Watcher] -->|Event Data| D
     C[Intelligence Modules] --- A
-    C1[Process Mapper] --- C
-    C2[GeoIP Manager] --- C
     D --> E[App State]
-    E --> F[Dashboard GUI]
+    D --> G[(SQLite Database)]
+    G -->|Load History| F[Dashboard GUI]
+    E --> F
     F -->|User Controls| E
+    G --> H[Security Alert Log]
 ```
 
 ## Tech Stack
 
 - **Language**: Python 3.11+
 - **GUI**: CustomTkinter
+- **Database**: SQLite3
 - **Network Capture**: PyShark (TShark engine)
 - **Intelligence**: psutil (Process mapping), geoip2 (GeoIP)
 - **System Logs**: pywin32
@@ -79,13 +84,16 @@ SentinelHIDS/
 ├── core/
 │   ├── sniffer.py          # Network capture & intelligence integration
 │   ├── log_watcher.py      # Event log monitoring
+│   ├── database.py         # SQLite persistence & event logging
 │   ├── process_mapper.py   # PID to Executable resolution
 │   ├── geoip_manager.py    # Offline GeoIP lookups
-│   ├── state.py            # Shared application state & counters
+│   ├── state.py            # Shared application state
 │   └── models.py           # Structured alert dataclasses
 ├── ui/
 │   └── dashboard.py        # Multi-view CustomTkinter dashboard
 ├── data/
+│   ├── alerts.db           # Persistent SQLite database
+│   ├── security_alerts.log # Exported security audit trail
 │   ├── rules.yaml          # Detection logic thresholds
 │   └── GeoLite2-City.mmdb  # MaxMind Database (Required)
 ├── docs/

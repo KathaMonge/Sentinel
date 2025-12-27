@@ -10,11 +10,9 @@ The project has successfully transitioned from initial scaffolding to a function
 - **Phase 2: Network Monitoring (Functional Alpha)**: Integrated PyShark for live packet capture. Currently detects outbound traffic on Port 80 (HTTP). Handles asynchronous event loop issues within dedicated threads.
 - **Phase 3: System Monitoring (Functional Alpha)**: Established the structure for monitoring Windows Security Logs using `pywin32`. Implemented basic privilege checks and feedback loops to the UI.
 - [x] Phase 4: Graphical User Interface (Functional)**: Developed a modern Dark-Mode dashboard using CustomTkinter. The UI successfully polls the alert queue and updates the display without freezing the main thread.
-- [x] Phase 5: Operational Intelligence & UI Refinement (Complete)**:
-  - **Process Correlation**: Integrated `psutil` to map network flows to local executables.
-  - **GeoIP Integration**: Resolved destination IPs to country codes.
-  - **Log Intelligence**: Implemented columnar normalization, temporal aggregation (deduplication), and semantic noise suppression.
-  - **Analytics UI**: Created a multi-view dashboard with live stats (Overview, Network, System) and optimized columnar alignment.
+- **Phase 5: Operational Intelligence & UI Refinement (Complete)**: Integrated process mapping, GeoIP lookups, and a multi-view dashboard with live statistics.
+- **Phase 6: Persistence Layer (Complete)**: Implemented SQLite database storage for all alerts. Added historical data loading and long-term security event logging.
+- **Phase 7: User Control & Stabilization (Complete)**: Added monitoring pause/resume controls, UI alignment refinements, and session-to-session persistence.
 
 ## Success Definition and Key Performance Indicators (KPIs)
 We measure the implementation success against the following standardized metrics:
@@ -32,13 +30,13 @@ We measure the implementation success against the following standardized metrics
 - **Noise Suppression**: Implemented filtering for background protocols (SSDP, mDNS).
 - **Advanced UI**: Overview dashboard with live packet and alert counters.
 
-### Phase 6: Logic and Persistence
+### Phase 8: Logic and Intelligence (In Progress)
 - **Advanced Rules Engine**: Implement `core/rules_engine.py`. This module will parse `rules.yaml` and provide a `check_alert(alert)` method. Logic will include severity scoring (0-10) and white-listing of trusted system processes to reduce noise.
-- **SQLite Persistence**: Implement `core/database.py`. All generated alerts will be stored in a local `alerts.db` file. This allows for historical analysis, session-to-session persistence, and future reporting features.
+- **Threat Intelligence**: Integrate with community-driven blocklists for automated malicious IP detection.
 
-### Phase 7: UI/UX & Rules Refinement
-- **Rules Customization**: Enable dynamic rule reloading from the GUI.
-- **Visual Analytics**: Add lightweight charts for historical alert trends using canvas elements.
+### Phase 9: Reporting & Exporting (Planned)
+- **Visual Analytics**: Add lightweight charts for historical alert trends (alerts per hour, top processes).
+- **PDF/CSV Reports**: Enable users to export filtered security events for external analysis.
 
 ## Technical Challenges and Mitigations
 - **Challenge**: PyShark's dependency on TShark can lead to orphan processes.

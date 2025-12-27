@@ -6,18 +6,37 @@ SentinelHIDS is a lightweight, host-based intrusion detection system designed fo
 
 ## Features
 
-- **Network Monitoring**: Captures outbound traffic to detect unencrypted HTTP (Port 80) and connections to high-risk regions.
-- **System Event Monitoring**: Watches Windows Security Logs for failed logins and other suspicious patterns.
-- **Real-Time Dashboard**: A modern, responsive GUI built with CustomTkinter for live alert viewing.
-- **Local-First Privacy**: Operates entirely locally; no data is sent to external cloud services.
-- **Rule-Based Engine**: YAML-driven rules for easy customization of alert thresholds.
+- **Operational Intelligence**: Real-time stats dashboard showing packet counts, filtered noise, and security alerts.
+- **Network Monitoring & Enrichment**:
+  - **Process Mapping**: Correlates outbound traffic to specific Windows executables (e.g., `chrome.exe`).
+  - **GeoIP Integration**: Resolves destination IPs to country codes using the MaxMind GeoLite2 database.
+  - **Unencrypted Traffic Detection**: Flags unencrypted HTTP (Port 80) connections.
+- **Log Intelligence**:
+  - **Temporal Aggregation**: Deduplicates repetitive high-frequency flows with a [xN] hit counter.
+  - **Semantic Noise Suppression**: Automatically filters mDNS, SSDP, LLMNR, and multicast background noise.
+- **System Event Monitoring**: Watches Windows Security Logs for failed logins and privilege escalations.
+- **Local-First Privacy**: Operates entirely offline; no telemetry or data ever leaves the host.
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Network Sniffer] -->|Packet Data| D[Queue]
+    B[Log Watcher] -->|Event Data| D
+    C[Intelligence Modules] --- A
+    C1[Process Mapper] --- C
+    C2[GeoIP Manager] --- C
+    D --> E[App State]
+    E --> F[Dashboard GUI]
+    F -->|User Controls| E
+```
 
 ## Tech Stack
 
 - **Language**: Python 3.11+
 - **GUI**: CustomTkinter
 - **Network Capture**: PyShark (TShark engine)
-- **Process Intelligence**: psutil
+- **Intelligence**: psutil (Process mapping), geoip2 (GeoIP)
 - **System Logs**: pywin32
 - **Config**: YAML
 
@@ -27,7 +46,8 @@ SentinelHIDS requires specific Windows drivers and tools to function:
 
 1.  **Npcap**: Install from [nmap.org/npcap](https://nmap.org/npcap/). During installation, check the box **"Install Npcap in WinPcap API-compatible Mode"**.
 2.  **Wireshark / TShark**: Install from [wireshark.org](https://www.wireshark.org/). TShark is used as the underlying capture engine.
-3.  **Administrator Privileges**: The application must be run from an Elevated/Admin terminal to access network drivers and Security Event Logs.
+3.  **GeoIP Database**: Place `GeoLite2-City.mmdb` in the `data/` directory for GeoIP features.
+4.  **Administrator Privileges**: The application must be run from an Elevated/Admin terminal to access network drivers and Security Event Logs.
 
 ## Installation
 
@@ -55,15 +75,19 @@ SentinelHIDS requires specific Windows drivers and tools to function:
 
 ```text
 SentinelHIDS/
-├── main.py                 # Application entry point
+├── main.py                 # Application launcher & thread manager
 ├── core/
-│   ├── sniffer.py          # Network capture thread
-│   ├── log_watcher.py      # Event log monitoring thread
-│   └── models.py           # Alert data structures
+│   ├── sniffer.py          # Network capture & intelligence integration
+│   ├── log_watcher.py      # Event log monitoring
+│   ├── process_mapper.py   # PID to Executable resolution
+│   ├── geoip_manager.py    # Offline GeoIP lookups
+│   ├── state.py            # Shared application state & counters
+│   └── models.py           # Structured alert dataclasses
 ├── ui/
-│   └── dashboard.py        # CustomTkinter GUI
+│   └── dashboard.py        # Multi-view CustomTkinter dashboard
 ├── data/
-│   └── rules.yaml          # Detection rules (YAML)
+│   ├── rules.yaml          # Detection logic thresholds
+│   └── GeoLite2-City.mmdb  # MaxMind Database (Required)
 ├── docs/
 │   └── PLANNING.md         # Detailed project roadmap
 └── requirements.txt

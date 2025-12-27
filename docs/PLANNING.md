@@ -9,8 +9,12 @@ The project has successfully transitioned from initial scaffolding to a function
 - **Phase 1: Core Architecture (Complete)**: Implemented a thread-safe `queue.Queue` system for inter-thread communication. The `main.py` script acts as the orchestrator, managing the lifecycle of background monitoring threads and the GUI main loop.
 - **Phase 2: Network Monitoring (Functional Alpha)**: Integrated PyShark for live packet capture. Currently detects outbound traffic on Port 80 (HTTP). Handles asynchronous event loop issues within dedicated threads.
 - **Phase 3: System Monitoring (Functional Alpha)**: Established the structure for monitoring Windows Security Logs using `pywin32`. Implemented basic privilege checks and feedback loops to the UI.
-- **Phase 4: Graphical User Interface (Functional)**: Developed a modern Dark-Mode dashboard using CustomTkinter. The UI successfully polls the alert queue and updates the display without freezing the main thread.
-- **Phase 5.5: Log Intelligence (Complete)**: Implemented columnar normalization, temporal aggregation (deduplication), and semantic noise suppression (mDNS, SSDP, etc.). Added severity-based highlighting.
+- [x] Phase 4: Graphical User Interface (Functional)**: Developed a modern Dark-Mode dashboard using CustomTkinter. The UI successfully polls the alert queue and updates the display without freezing the main thread.
+- [x] Phase 5: Operational Intelligence & UI Refinement (Complete)**:
+  - **Process Correlation**: Integrated `psutil` to map network flows to local executables.
+  - **GeoIP Integration**: Resolved destination IPs to country codes.
+  - **Log Intelligence**: Implemented columnar normalization, temporal aggregation (deduplication), and semantic noise suppression.
+  - **Analytics UI**: Created a multi-view dashboard with live stats (Overview, Network, System) and optimized columnar alignment.
 
 ## Success Definition and Key Performance Indicators (KPIs)
 We measure the implementation success against the following standardized metrics:
@@ -23,17 +27,18 @@ We measure the implementation success against the following standardized metrics
 
 ## Detailed Roadmap for Future Implementation
 
-### Phase 5: Process Correlation and Intelligence
-- **Process Mapping**: Utilize the `psutil` library to snapshot `net_connections()` and match local port/protocol pairs to specific Process IDs (PID). Resolve these IDs to executable names (e.g., `chrome.exe`, `svchost.exe`).
-- **GeoIP Integration**: Incorporate the MaxMind GeoLite2 (free) offline database (`.mmdb`). Each destination IP will be resolved to a country/region to flag connections to "High-Risk" areas defined in the rules.
+### Phase 5: Operational Intelligence (Complete)
+- **Process & GeoIP Mapping**: Successfully correlating traffic to processes and locations.
+- **Noise Suppression**: Implemented filtering for background protocols (SSDP, mDNS).
+- **Advanced UI**: Overview dashboard with live packet and alert counters.
 
 ### Phase 6: Logic and Persistence
 - **Advanced Rules Engine**: Implement `core/rules_engine.py`. This module will parse `rules.yaml` and provide a `check_alert(alert)` method. Logic will include severity scoring (0-10) and white-listing of trusted system processes to reduce noise.
 - **SQLite Persistence**: Implement `core/database.py`. All generated alerts will be stored in a local `alerts.db` file. This allows for historical analysis, session-to-session persistence, and future reporting features.
 
-### Phase 7: UI/UX Refinement
-- **Multi-View Dashboard**: Implement a proper frame-switching mechanism in `ui/dashboard.py` to allow distinct views for "Network Monitor", "System Logs", and "Configuration".
-- **Visual Analytics**: Add basic charts or counters showing "Alerts per Hour" or "Top Suspicious Processes" using lightweight canvas elements or stats labels.
+### Phase 7: UI/UX & Rules Refinement
+- **Rules Customization**: Enable dynamic rule reloading from the GUI.
+- **Visual Analytics**: Add lightweight charts for historical alert trends using canvas elements.
 
 ## Technical Challenges and Mitigations
 - **Challenge**: PyShark's dependency on TShark can lead to orphan processes.

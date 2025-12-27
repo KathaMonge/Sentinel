@@ -47,6 +47,15 @@ class SnifferThread(threading.Thread):
                 source="Sniffer",
                 message=f"Network monitoring active on {self.interface}"
             ))
+            
+            # Also send to Network Intelligence view for visual confirmation
+            self.alert_queue.put(Alert(
+                timestamp=datetime.now(),
+                alert_type="Network",
+                severity="Info",
+                source="Sniffer",
+                message=f"Sniffer capture loop started on {self.interface}"
+            ))
 
             for packet in self.capture.sniff_continuously():
                 if not self.running:
@@ -144,6 +153,8 @@ class SnifferThread(threading.Thread):
                 
                 # Counters
                 self.app_state.pkt_count += 1
+                if self.app_state.show_all_traffic:
+                    print(f"[*] Processed packet: {src_ip} -> {dst_ip}:{dst_port} ({protocol})")
                 
                 # Noise Filtering
                 is_noise_packet = self.is_noise(dst_ip, dst_port, protocol)
@@ -185,14 +196,10 @@ class SnifferThread(threading.Thread):
                 )
 
                 if self.app_state.show_all_traffic or alert_type == "Network":
-                    if alert_type == "Traffic":
-                         pass # Don't count traffic as "Security Alerts" for the counter, or maybe we do?
-                         # The prompt said "Security Alerts: Alerts generated (Port 80, etc.)"
-                         # So I will only count Port 80 above.
                     self.emit_alert(alert)
                     
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[!] Error processing packet: {e}")
 
     def stop(self):
         self.running = False

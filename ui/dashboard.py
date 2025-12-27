@@ -29,51 +29,58 @@ class SentinelDashboard(ctk.CTk):
         # Sidebar
         self.sidebar_frame = ctk.CTkFrame(self, width=240, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(8, weight=1) # Dynamic spacer
         
+        # Logo
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SentinelHIDS", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
+        row_idx = 1
+        
         # Section: Views
-        self.lbl_views = ctk.CTkLabel(self.sidebar_frame, text="SERVICES", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
-        self.lbl_views.grid(row=1, column=0, padx=20, pady=(10, 0), sticky="w")
-
+        self.lbl_v = ctk.CTkLabel(self.sidebar_frame, text="SERVICES", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_v.grid(row=row_idx, column=0, padx=20, pady=(10, 0), sticky="w"); row_idx += 1
+        
         self.btn_overview = ctk.CTkButton(self.sidebar_frame, text="Overview", command=lambda: self.switch_view("Overview"))
-        self.btn_overview.grid(row=2, column=0, padx=20, pady=5)
+        self.btn_overview.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
         
         self.btn_network = ctk.CTkButton(self.sidebar_frame, text="Network Monitor", command=lambda: self.switch_view("Network Monitoring"))
-        self.btn_network.grid(row=3, column=0, padx=20, pady=5)
+        self.btn_network.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
         
         self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs", command=lambda: self.switch_view("System Event Logs"))
-        self.btn_system.grid(row=4, column=0, padx=20, pady=5)
+        self.btn_system.grid(row=row_idx, column=0, padx=20, pady=5, sticky="ew"); row_idx += 1
 
         # Section: Monitoring
-        self.lbl_mon = ctk.CTkLabel(self.sidebar_frame, text="MONITORING", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
-        self.lbl_mon.grid(row=5, column=0, padx=20, pady=(20, 0), sticky="w")
+        self.lbl_m = ctk.CTkLabel(self.sidebar_frame, text="MONITORING", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_mon_offset = 5 # Used to identify the section start
+        self.lbl_m.grid(row=row_idx, column=0, padx=20, pady=(20, 0), sticky="w"); row_idx += 1
 
         self.status_lbl = ctk.CTkLabel(self.sidebar_frame, text="STATUS: PAUSED", text_color="orange", font=ctk.CTkFont(weight="bold"))
-        self.status_lbl.grid(row=6, column=0, padx=20, pady=0)
+        self.status_lbl.grid(row=row_idx, column=0, padx=20, pady=0, sticky="ew"); row_idx += 1
 
         self.btn_start = ctk.CTkButton(self.sidebar_frame, text="Start Monitoring", fg_color="green", hover_color="darkgreen", command=self.toggle_monitoring)
-        self.btn_start.grid(row=7, column=0, padx=20, pady=10)
+        self.btn_start.grid(row=row_idx, column=0, padx=20, pady=10, sticky="ew"); row_idx += 1
         
-        # Section: Options (Pinned to bottom via Row 8 spacer)
-        self.lbl_opts = ctk.CTkLabel(self.sidebar_frame, text="OPTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
-        self.lbl_opts.grid(row=9, column=0, padx=20, pady=(10, 0), sticky="w")
+        # Spacer
+        self.sidebar_frame.grid_rowconfigure(row_idx, weight=1)
+        row_idx += 1
+        
+        # Section: Options
+        self.lbl_o = ctk.CTkLabel(self.sidebar_frame, text="OPTIONS", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray")
+        self.lbl_o.grid(row=row_idx, column=0, padx=20, pady=(10, 0), sticky="w"); row_idx += 1
 
         self.chk_audit = ctk.CTkCheckBox(self.sidebar_frame, text="Audit All Mode", command=self.toggle_audit)
-        self.chk_audit.grid(row=10, column=0, padx=20, pady=5)
+        self.chk_audit.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
         
         self.chk_noise = ctk.CTkCheckBox(self.sidebar_frame, text="Hide Local Noise", command=self.toggle_noise)
         self.chk_noise.select()
-        self.chk_noise.grid(row=11, column=0, padx=20, pady=5)
+        self.chk_noise.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
         
         self.chk_aggr = ctk.CTkCheckBox(self.sidebar_frame, text="Dedup. Mode", command=self.toggle_aggr)
         self.chk_aggr.select()
-        self.chk_aggr.grid(row=12, column=0, padx=20, pady=5)
+        self.chk_aggr.grid(row=row_idx, column=0, padx=20, pady=5, sticky="w"); row_idx += 1
 
         self.btn_clear = ctk.CTkButton(self.sidebar_frame, text="Clear Logs", fg_color="#444", hover_color="red", command=self.clear_logs)
-        self.btn_clear.grid(row=13, column=0, padx=20, pady=(10, 20))
+        self.btn_clear.grid(row=row_idx, column=0, padx=20, pady=(10, 20), sticky="ew")
 
         # Main Content Area
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -247,16 +254,28 @@ class SentinelDashboard(ctk.CTk):
             geo = (alert.country or "-")[:3].ljust(3)
             msg = alert.message[:35].ljust(35)
             cnt = f"[x{alert.count}]" if alert.count > 1 else "    "
-            lat = f"{latency_ms:3.0f}ms"
+            
+            # Latency logic: Only show for live packets (< 5s old)
+            time_diff = (display_time - alert.timestamp).total_seconds()
+            if time_diff > 5:
+                lat = "  -  " # Placeholder for historical data
+            else:
+                lat = f"{latency_ms:3.0f}ms"
 
             formatted_line = f"[{t_str}] {proc} {dest} {port} {geo} {msg} {lat} {cnt}\n"
             
-            # Deduplication relies on the hash matching the last inserted line IN THIS LOG
-            # simpler approach: we won't strictly dedup the UI line here to avoid complexity with switching views
-            # or we rely on the backend not sending it unless count > 1
-            
             target_log.configure(state="normal")
+            
+            # Temporal Aggregation UI logic: 
+            # If the new alert has the SAME flow_hash as the LAST one added, 
+            # and Dedup is enabled, replace the top line instead of adding a new one.
+            h = alert.flow_hash
+            if self.app_state.aggregation_enabled and self.last_hash == h:
+                 # Delete the top line (1.0 to 2.0)
+                 target_log.delete("1.0", "2.0")
+            
             target_log.insert("1.0", formatted_line, alert.severity)
+            self.last_hash = h
             
             # Truncate
             if float(target_log.index("end-1c")) > 500:

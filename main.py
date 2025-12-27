@@ -68,7 +68,7 @@ def main():
         alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "No network interface detected."))
 
     # Start Log Watcher
-    log_thread = LogWatcherThread(alert_queue, db_manager)
+    log_thread = LogWatcherThread(alert_queue, db_manager, app_state)
     log_thread.start()
 
     # Diagnostic alert

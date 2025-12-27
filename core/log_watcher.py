@@ -8,12 +8,14 @@ from datetime import datetime
 from core.models import Alert
 import queue
 from core.database import DatabaseManager
+from core.state import AppState
 
 class LogWatcherThread(threading.Thread):
-    def __init__(self, alert_queue: queue.Queue, db_manager: DatabaseManager):
+    def __init__(self, alert_queue: queue.Queue, db_manager: DatabaseManager, app_state: AppState):
         super().__init__()
         self.alert_queue = alert_queue
         self.db_manager = db_manager
+        self.app_state = app_state
         self.running = True
         self.daemon = True
         

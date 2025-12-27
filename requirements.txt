@@ -1,0 +1,5 @@
+customtkinter
+pyshark
+psutil
+pywin32
+geoip2

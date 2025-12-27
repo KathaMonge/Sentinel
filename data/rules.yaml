@@ -1,0 +1,19 @@
+# SentinelHIDS Rules Configuration
+
+# Alert Severity Levels: Info, Low, Medium, High, Critical
+
+network_rules:
+  high_risk_countries:
+    - "CN" # China
+    - "RU" # Russia
+    - "KP" # North Korea
+    - "IR" # Iran
+  
+  suspicious_ports:
+    - 23   # Telnet
+    - 445  # SMB (often internal only)
+    - 3389 # RDP (alert if outgoing to public internet)
+
+system_rules:
+  # Event IDs to monitor
+  failed_login_event_id: 4625

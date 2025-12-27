@@ -60,24 +60,50 @@ class SentinelDashboard(ctk.CTk):
         self.main_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         
-        # Header
-        self.header = ctk.CTkLabel(self.main_frame, text="Operational Intelligence", font=ctk.CTkFont(size=24, weight="bold"))
-        self.header.pack(anchor="w")
+        self.view_label = ctk.CTkLabel(self.main_frame, text="Network Intelligence", font=ctk.CTkFont(size=24, weight="bold"))
+        self.view_label.pack(anchor="w", pady=(0, 10))
+
+        # --- Network View ---
+        self.network_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         
-        # Alerts Text Box (Structured format)
-        self.alerts_textbox = ctk.CTkTextbox(self.main_frame, width=800, height=520, font=("Consolas", 12))
-        self.alerts_textbox.pack(pady=10, fill="both", expand=True)
-        self.alerts_textbox.configure(state="disabled")
+        # Network Header
+        header_text = "TIME     | PROCESS         | DESTINATION     | PORT  | GEO | MESSAGE                        | LATENCY | COUNT"
+        self.net_header_lbl = ctk.CTkLabel(self.network_frame, text=header_text, font=("Consolas", 11, "bold"), anchor="w", text_color="silver")
+        self.net_header_lbl.pack(fill="x")
         
-        # Color Tags for Severity
-        self.alerts_textbox.tag_config("Trace", foreground="gray")
-        self.alerts_textbox.tag_config("Info", foreground="white") # Notice
-        self.alerts_textbox.tag_config("Warning", foreground="orange")
-        self.alerts_textbox.tag_config("Critical", foreground="red") # Alert
-        self.alerts_textbox.tag_config("System", foreground="cyan")
+        self.network_log = ctk.CTkTextbox(self.network_frame, width=800, height=500, font=("Consolas", 12))
+        self.network_log.pack(fill="both", expand=True)
+        self.network_log.configure(state="disabled")
+        
+        self._setup_tags(self.network_log)
+
+        # --- System View ---
+        self.system_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        
+        # System Header
+        sys_header_text = "TIME     | SOURCE          | SEVERITY | MESSAGE"
+        self.sys_header_lbl = ctk.CTkLabel(self.system_frame, text=sys_header_text, font=("Consolas", 11, "bold"), anchor="w", text_color="silver")
+        self.sys_header_lbl.pack(fill="x")
+        
+        self.system_log = ctk.CTkTextbox(self.system_frame, width=800, height=500, font=("Consolas", 12))
+        self.system_log.pack(fill="both", expand=True)
+        self.system_log.configure(state="disabled")
+        
+        self._setup_tags(self.system_log)
+        
+        # Default View
+        self.active_view = "Network"
+        self.network_frame.pack(fill="both", expand=True)
         
         # Start polling queue
         self.check_queue()
+
+    def _setup_tags(self, textbox):
+        textbox.tag_config("Trace", foreground="gray")
+        textbox.tag_config("Info", foreground="white")
+        textbox.tag_config("Warning", foreground="orange")
+        textbox.tag_config("Critical", foreground="red")
+        textbox.tag_config("System", foreground="cyan")
 
     def toggle_audit(self):
         self.app_state.show_all_traffic = bool(self.chk_audit.get())
@@ -91,15 +117,28 @@ class SentinelDashboard(ctk.CTk):
         self.app_state.aggregation_enabled = bool(self.chk_aggr.get())
 
     def clear_logs(self):
-        self.alerts_textbox.configure(state="normal")
-        self.alerts_textbox.delete("1.0", "end")
-        self.alerts_textbox.configure(state="disabled")
+        # Clear the active view
+        target = self.network_log if self.active_view == "Network" else self.system_log
+        target.configure(state="normal")
+        target.delete("1.0", "end")
+        target.configure(state="disabled")
 
     def switch_view(self, view_name):
-        self.header.configure(text=view_name)
-        # For a full implementation, we would swap frames here.
-        # For now, just updating the header confirms the buttons work.
-        self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", f"Switched view to {view_name}"))
+        # Hide all first
+        self.network_frame.pack_forget()
+        self.system_frame.pack_forget()
+        
+        if view_name == "System Event Logs":
+            self.active_view = "System"
+            self.view_label.configure(text="System Events")
+            self.system_frame.pack(fill="both", expand=True)
+        else:
+            # Default to Network for Overview/Network
+            self.active_view = "Network"
+            self.view_label.configure(text="Network Intelligence")
+            self.network_frame.pack(fill="both", expand=True)
+            
+        self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", f"Switched view to {view_name}"))
 
     def check_queue(self):
         """Poll the queue for new alerts."""
@@ -115,19 +154,16 @@ class SentinelDashboard(ctk.CTk):
             self.after(100, self.check_queue)
 
     def add_alert(self, alert: Alert):
-        """Add structured alert with columnar formatting and color-coding."""
+        """Add alert to the appropriate log view."""
         display_time = datetime.now()
         latency_ms = (display_time - alert.timestamp).total_seconds() * 1000
-        
-        # Handle Deduplication: If the same flow hit within 5s, we update the first line
-        # Simple implementation: check if the hash of top line matches
-        h = alert.flow_hash
-        try:
-            self.alerts_textbox.configure(state="normal")
+        t_str = alert.timestamp.strftime('%H:%M:%S')
+
+        # ROUTING LOGIC
+        if alert.alert_type in ["Network", "Traffic"]:
+            # --- Network Log (Columnar) ---
+            target_log = self.network_log
             
-            # Formatted Columnar string
-            # [TIME] [PROT] [PROCESS] [DESTINATION] [PORT] [GEO] [MSG] [CNT]
-            t_str = alert.timestamp.strftime('%H:%M:%S')
             proc = (alert.process_name or "Unknown")[:15].ljust(15)
             dest = (alert.dst_ip or "-").ljust(15)
             port = str(alert.dst_port or "-").ljust(5)
@@ -137,20 +173,32 @@ class SentinelDashboard(ctk.CTk):
             lat = f"{latency_ms:3.0f}ms"
 
             formatted_line = f"[{t_str}] {proc} {dest} {port} {geo} {msg} {lat} {cnt}\n"
+            
+            # Deduplication relies on the hash matching the last inserted line IN THIS LOG
+            # simpler approach: we won't strictly dedup the UI line here to avoid complexity with switching views
+            # or we rely on the backend not sending it unless count > 1
+            
+            target_log.configure(state="normal")
+            target_log.insert("1.0", formatted_line, alert.severity)
+            
+            # Truncate
+            if float(target_log.index("end-1c")) > 500:
+                target_log.delete("501.0", "end")
+            target_log.configure(state="disabled")
 
-            # Deduplication: If this hash matches the last one, replace the top line
-            if h == self.last_hash:
-                self.alerts_textbox.delete("1.0", "2.0")
+        else:
+            # --- System Log (Simple) ---
+            target_log = self.system_log
             
-            self.alerts_textbox.insert("1.0", formatted_line, alert.severity)
-            self.last_hash = h
+            src = (alert.source or "System")[:15].ljust(15)
+            sev = (alert.severity or "Info").ljust(8)
+            msg = alert.message
             
-            # Keep log buffer manageable (e.g. 500 lines)
-            if float(self.alerts_textbox.index("end-1c")) > 500:
-                self.alerts_textbox.delete("501.0", "end")
-                
-        finally:
-            self.alerts_textbox.configure(state="disabled")
+            formatted_line = f"[{t_str}] {src} {sev} {msg}\n"
+            
+            target_log.configure(state="normal")
+            target_log.insert("1.0", formatted_line, alert.severity)
+            target_log.configure(state="disabled")
 
 def start_gui(alert_queue: queue.Queue, app_state: AppState):
     app = SentinelDashboard(alert_queue, app_state)

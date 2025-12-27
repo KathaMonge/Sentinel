@@ -18,6 +18,15 @@ class LogWatcherThread(threading.Thread):
     def run(self):
         print("[*] Starting System Log Watcher...")
         
+        # Feedback alert
+        self.alert_queue.put(Alert(
+            timestamp=datetime.now(),
+            alert_type="System",
+            severity="Info",
+            source="LogWatcher",
+            message="System log monitoring initialized."
+        ))
+        
         server = 'localhost'
         log_type = 'Security'
         

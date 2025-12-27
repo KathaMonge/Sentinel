@@ -4,7 +4,7 @@
 
 SentinelHIDS is a lightweight, host-based intrusion detection system designed for Windows. It monitors network traffic and system events in real-time to detect suspicious activity and potential privacy leaks.
 
-## 🚀 Features
+## Features
 
 - **Network Monitoring**: Captures outbound traffic to detect unencrypted HTTP (Port 80) and connections to high-risk regions.
 - **System Event Monitoring**: Watches Windows Security Logs for failed logins and other suspicious patterns.
@@ -12,7 +12,7 @@ SentinelHIDS is a lightweight, host-based intrusion detection system designed fo
 - **Local-First Privacy**: Operates entirely locally; no data is sent to external cloud services.
 - **Rule-Based Engine**: YAML-driven rules for easy customization of alert thresholds.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Language**: Python 3.11+
 - **GUI**: CustomTkinter
@@ -21,7 +21,7 @@ SentinelHIDS is a lightweight, host-based intrusion detection system designed fo
 - **System Logs**: pywin32
 - **Config**: YAML
 
-## 📋 Prerequisites
+## Prerequisites
 
 SentinelHIDS requires specific Windows drivers and tools to function:
 
@@ -29,7 +29,7 @@ SentinelHIDS requires specific Windows drivers and tools to function:
 2.  **Wireshark / TShark**: Install from [wireshark.org](https://www.wireshark.org/). TShark is used as the underlying capture engine.
 3.  **Administrator Privileges**: The application must be run from an Elevated/Admin terminal to access network drivers and Security Event Logs.
 
-## 💻 Installation
+## Installation
 
 1.  **Clone the repository**:
     ```bash
@@ -42,7 +42,7 @@ SentinelHIDS requires specific Windows drivers and tools to function:
     python -m pip install -r requirements.txt
     ```
 
-## 🏃 Usage
+## Usage
 
 1.  Open **Command Prompt** or **PowerShell** as **Administrator**.
 2.  Navigate to the project directory.
@@ -51,7 +51,7 @@ SentinelHIDS requires specific Windows drivers and tools to function:
     python main.py
     ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 SentinelHIDS/
@@ -69,12 +69,12 @@ SentinelHIDS/
 └── requirements.txt
 ```
 
-## ⚠️ Troubleshooting
+## Troubleshooting
 
 - **TShark not found**: Ensure Wireshark is installed and `tshark.exe` is in your system PATH.
 - **Permission Denied**: Ensure you are running the terminal as Administrator.
 - **Sniffer Crash**: Verify Npcap is installed and your network interface is active.
 
-## ⚖️ License
+## License
 
 Designed for defensive monitoring, auditing, and educational purposes.

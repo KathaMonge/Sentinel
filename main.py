@@ -62,12 +62,19 @@ def main():
     log_thread = LogWatcherThread(alert_queue)
     log_thread.start()
 
+    # Diagnostic alert
+    alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", "Queue-to-GUI communication test."))
+
     # 3. Start GUI (Blocks this thread until closed)
     print("Starting GUI...")
     try:
         start_gui(alert_queue)
     except KeyboardInterrupt:
-        pass
+        print("[*] Keyboard Interrupt received.")
+    except Exception as e:
+        print(f"[!] GUI Error: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         print("Stopping threads...")
         if sniffer_thread:
@@ -75,7 +82,7 @@ def main():
             sniffer_thread.join(timeout=2)
         if log_thread:
             log_thread.stop()
-            log_thread.join(timeout=2)
+            log_thread.join(timeout=3)
         print("SentinelHIDS stopped.")
 
 if __name__ == "__main__":

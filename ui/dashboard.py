@@ -28,13 +28,13 @@ class SentinelDashboard(ctk.CTk):
         self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="SentinelHIDS", font=ctk.CTkFont(size=20, weight="bold"))
         self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
         
-        self.btn_overview = ctk.CTkButton(self.sidebar_frame, text="Overview")
+        self.btn_overview = ctk.CTkButton(self.sidebar_frame, text="Overview", command=lambda: self.switch_view("Overview"))
         self.btn_overview.grid(row=1, column=0, padx=20, pady=10)
         
-        self.btn_network = ctk.CTkButton(self.sidebar_frame, text="Network Monitor")
+        self.btn_network = ctk.CTkButton(self.sidebar_frame, text="Network Monitor", command=lambda: self.switch_view("Network Monitoring"))
         self.btn_network.grid(row=2, column=0, padx=20, pady=10)
         
-        self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs")
+        self.btn_system = ctk.CTkButton(self.sidebar_frame, text="System Logs", command=lambda: self.switch_view("System Event Logs"))
         self.btn_system.grid(row=3, column=0, padx=20, pady=10)
         
         # Main Content Area
@@ -42,16 +42,22 @@ class SentinelDashboard(ctk.CTk):
         self.main_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
         
         # Header
-        self.header = ctk.CTkLabel(self.main_frame, text="Live Alerts", font=ctk.CTkFont(size=24, weight="bold"))
+        self.header = ctk.CTkLabel(self.main_frame, text="Overview Dashboard", font=ctk.CTkFont(size=24, weight="bold"))
         self.header.pack(anchor="w")
         
         # Alerts Text Box (Simple List for now)
-        self.alerts_textbox = ctk.CTkTextbox(self.main_frame, width=800, height=500)
+        self.alerts_textbox = ctk.CTkTextbox(self.main_frame, width=800, height=520)
         self.alerts_textbox.pack(pady=10, fill="both", expand=True)
         self.alerts_textbox.configure(state="disabled") # Read only
         
         # Start polling queue
         self.check_queue()
+
+    def switch_view(self, view_name):
+        self.header.configure(text=view_name)
+        # For a full implementation, we would swap frames here.
+        # For now, just updating the header confirms the buttons work.
+        self.add_alert(Alert(datetime.now(), "UI", "Info", "Dashboard", f"Switched view to {view_name}"))
 
     def check_queue(self):
         """Poll the queue for new alerts."""

@@ -24,10 +24,18 @@ class SnifferThread(threading.Thread):
         
         try:
             # display_filter to capture only interesting traffic (TCP/UDP)
-            # Adjust as needed (e.g. 'ip' or 'tcp or udp')
-            capture = pyshark.LiveCapture(interface=self.interface, display_filter='ip')
+            self.capture = pyshark.LiveCapture(interface=self.interface, display_filter='ip')
             
-            for packet in capture.sniff_continuously():
+            # Send an initial alert to confirm sniffer is working
+            self.alert_queue.put(Alert(
+                timestamp=datetime.now(),
+                alert_type="System",
+                severity="Info",
+                source="Sniffer",
+                message=f"Network monitoring active on {self.interface}"
+            ))
+
+            for packet in self.capture.sniff_continuously():
                 if not self.running:
                     break
                 
@@ -35,7 +43,6 @@ class SnifferThread(threading.Thread):
                 
         except Exception as e:
             print(f"[!] Sniffer thread error: {e}")
-            # In a real app, maybe send a System alert to the queue so GUI shows error
             err_alert = Alert(
                 timestamp=datetime.now(),
                 alert_type="System",
@@ -44,6 +51,12 @@ class SnifferThread(threading.Thread):
                 message=f"Sniffer crashed: {e}"
             )
             self.alert_queue.put(err_alert)
+        finally:
+            if hasattr(self, 'capture'):
+                try:
+                    self.capture.close()
+                except:
+                    pass
 
     def process_packet(self, packet):
         try:

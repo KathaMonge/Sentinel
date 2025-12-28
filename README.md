@@ -109,4 +109,10 @@ SentinelHIDS/
 
 ## License
 
-Designed for defensive monitoring, auditing, and educational purposes.
+This project is licensed under the **MIT License**.
+
+- **Permissive**: You can use, copy, modify, and distribute the software.
+- **Liability**: The software is provided "as is" without warranty of any kind.
+- **Attribution**: You must include the original copyright notice and this permission notice in all copies or substantial portions of the software.
+
+See the [LICENSE](LICENSE) file for the full text.

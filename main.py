@@ -37,9 +37,13 @@ def get_active_interface():
 def main():
     print(f"[{datetime.now()}] SentinelHIDS starting...")
     
-    if not is_admin():
-        print("[!] WARNING: Not running as Administrator. Packet capture and Security Log reading will likely fail.")
-        print("[!] Please run this terminal as Administrator.")
+    # Check privileges and implement graceful degradation
+    admin_mode = is_admin()
+    if not admin_mode:
+        print("[!] WARNING: Not running as Administrator. Some features will be limited.")
+        print("[!] - Network packet capture will be disabled")
+        print("[!] - Windows Security Event Log access will be limited")
+        print("[!] - Run as Administrator for full functionality")
     
     # 1. Initialize the thread-safe queue for alerts
     alert_queue = queue.Queue()
@@ -47,8 +51,7 @@ def main():
     # 2. Shared Application State
     app_state = AppState()
     
-    # 3. Setup Background Threads
-    # Find interface
+    # 3. Setup Background Threads with privilege awareness
     interface = get_active_interface()
     sniffer_thread = None
     log_thread = None
@@ -56,23 +59,45 @@ def main():
     # Database Manager
     db_manager = DatabaseManager("data/alerts.db")
     
-    if interface:
+    # Network Sniffer - Requires admin privileges
+    if interface and admin_mode:
         print(f"[*] Detected active interface: {interface}")
-        # Note: PyShark on Windows sometimes needs specific adapter names. 
-        # If 'Ethernet' fails, might need to list from tshark -D.
-        sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue, app_state=app_state, db_manager=db_manager)
-        sniffer_thread.start()
+        try:
+            sniffer_thread = SnifferThread(interface=interface, alert_queue=alert_queue, app_state=app_state, db_manager=db_manager)
+            sniffer_thread.start()
+            alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", f"Network monitoring started on {interface}"))
+        except Exception as e:
+            print(f"[!] Failed to start network sniffer: {e}")
+            alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", f"Network sniffer failed: {e}"))
+    elif interface and not admin_mode:
+        print("[!] Network interface detected but packet capture requires Administrator privileges")
+        alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "Network monitoring disabled (requires admin)"))
     else:
-        print("[!] No active non-loopback interface found. Sniffer will not start.")
-        # Send a system alert to GUI
-        alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "No network interface detected."))
+        print("[!] No active network interface found")
+        alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "No network interface detected"))
 
-    # Start Log Watcher
-    log_thread = LogWatcherThread(alert_queue, db_manager, app_state)
-    log_thread.start()
+    # Log Watcher - Can run in limited mode without admin
+    try:
+        log_thread = LogWatcherThread(alert_queue, db_manager, app_state)
+        log_thread.start()
+        if admin_mode:
+            print("[*] System log monitoring started (full access)")
+            alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", "Security log monitoring started"))
+        else:
+            print("[*] System log monitoring started (limited access)")
+            alert_queue.put(Alert(datetime.now(), "System", "Warning", "Main", "Limited log access (run as admin for full monitoring)"))
+    except Exception as e:
+        print(f"[!] Failed to start log watcher: {e}")
+        alert_queue.put(Alert(datetime.now(), "System", "Critical", "Main", f"Log watcher failed: {e}"))
 
+    # Status summary
+    if admin_mode:
+        print("[*] Running in Administrator mode with full functionality")
+    else:
+        print("[*] Running in limited mode - some features disabled")
+    
     # Diagnostic alert
-    alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", "Queue-to-GUI communication test."))
+    alert_queue.put(Alert(datetime.now(), "System", "Info", "Main", f"SentinelHIDS initialized - Admin mode: {admin_mode}"))
 
     # 4. Start GUI (Blocks this thread until closed)
     print("Starting GUI...")
@@ -88,10 +113,10 @@ def main():
         print("Stopping threads...")
         if sniffer_thread:
             sniffer_thread.stop()
-            sniffer_thread.join(timeout=2)
+            sniffer_thread.join(timeout=5)
         if log_thread:
             log_thread.stop()
-            log_thread.join(timeout=3)
+            log_thread.join(timeout=5)
         print("SentinelHIDS stopped.")
 
 if __name__ == "__main__":

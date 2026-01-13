@@ -223,18 +223,30 @@ class SentinelDashboard(ctk.CTk):
             
         self.add_alert(Alert(datetime.now(), "System", "Info", "Dashboard", f"Switched view to {view_name}"))
 
-    def check_queue(self):
-        """Poll the queue for new alerts."""
+def check_queue(self):
+        """Process alerts from queue with batch processing."""
+        alerts_processed = 0
+        max_batch_size = 10  # Process up to 10 alerts at once
+        
         try:
-            while True:
+            while alerts_processed < max_batch_size:
                 # Non-blocking get
                 alert = self.alert_queue.get_nowait()
                 self.add_alert(alert)
+                alerts_processed += 1
+                
         except queue.Empty:
             pass
         finally:
-            # Schedule next check in 100ms
-            self.after(100, self.check_queue)
+            # Dynamic polling interval based on activity
+            if alerts_processed > 0:
+                # High activity - check more frequently
+                poll_interval = 50
+            else:
+                # No activity - reduce polling frequency
+                poll_interval = 200
+            
+            self.after(poll_interval, self.check_queue)
 
     def add_alert(self, alert: Alert):
         """Add alert to the appropriate log view."""

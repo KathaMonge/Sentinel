@@ -10,7 +10,7 @@ class DatabaseManager:
         self.lock = threading.Lock()
         self._init_db()
 
-    def _init_db(self):
+def _init_db(self):
         """Create the alerts table if it doesn't exist."""
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         with self.lock:
@@ -19,20 +19,24 @@ class DatabaseManager:
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS alerts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT,
-                    alert_type TEXT,
-                    severity TEXT,
-                    source TEXT,
-                    message TEXT,
+                    timestamp TEXT NOT NULL,
+                    alert_type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    message TEXT NOT NULL,
                     src_ip TEXT,
                     dst_ip TEXT,
                     dst_port INTEGER,
                     process_name TEXT,
                     process_id INTEGER,
                     country TEXT,
-                    hit_count INTEGER
+                    hit_count INTEGER DEFAULT 1
                 )
             ''')
+            # Create indexes for better performance
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON alerts(timestamp)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_severity ON alerts(severity)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_alert_type ON alerts(alert_type)')
             conn.commit()
             conn.close()
 
@@ -102,14 +106,20 @@ class DatabaseManager:
                 print(f"[!] Database retrieval error: {e}")
         return alerts
 
-    def log_security_event(self, alert: Alert):
+def log_security_event(self, alert: Alert):
         """Append high-severity alerts to a dedicated log file."""
         if alert.severity not in ["Warning", "Critical"]:
             return
             
         log_path = "data/security_alerts.log"
         timestamp = alert.timestamp.strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"[{timestamp}] [{alert.severity}] [{alert.alert_type}] Source: {alert.source} | Msg: {alert.message} | PID: {alert.process_id} ({alert.process_name})\n"
+        
+        # Sanitize log entry to prevent injection
+        safe_message = self._sanitize_log_string(alert.message)
+        safe_source = self._sanitize_log_string(alert.source)
+        safe_process_name = self._sanitize_log_string(alert.process_name or "")
+        
+        log_entry = f"[{timestamp}] [{alert.severity}] [{alert.alert_type}] Source: {safe_source} | Msg: {safe_message} | PID: {alert.process_id} ({safe_process_name})\n"
         
         with self.lock:
             try:
@@ -119,3 +129,11 @@ class DatabaseManager:
                     f.write(log_entry)
             except Exception as e:
                 print(f"[!] Alert logging failed: {e}")
+
+    def _sanitize_log_string(self, text: str) -> str:
+        """Sanitize strings for logging to prevent injection."""
+        if not text:
+            return ""
+        # Remove control characters and limit length
+        sanitized = ''.join(char for char in text if char.isprintable() or char in '\t\n\r')
+        return sanitized[:500]  # Limit to 500 characters

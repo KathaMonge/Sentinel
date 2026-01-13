@@ -5,6 +5,7 @@ from datetime import datetime
 from core.models import Alert
 import queue
 import asyncio
+import logging
 
 from core.process_mapper import ProcessMapper
 from core.geoip_manager import GeoIPManager
@@ -21,6 +22,10 @@ class SnifferThread(threading.Thread):
         self.db_manager = db_manager
         self.running = True
         self.daemon = True 
+        self.logger = logging.getLogger(__name__)
+        self.retry_count = 0
+        self.max_retries = 5
+        self.retry_delay = 2
         
         # Initialize Intelligence Modules
         self.process_mapper = ProcessMapper()
@@ -30,56 +35,87 @@ class SnifferThread(threading.Thread):
         self.flow_cache = {}
         self.cache_lock = threading.Lock()
 
-    def run(self):
+def run(self):
         print(f"[*] Starting network sniffer on {self.interface}...")
+        self.logger.info(f"Sniffer starting on interface {self.interface}")
         
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
-        try:
-            self.capture = pyshark.LiveCapture(interface=self.interface, display_filter='ip')
-            
-            # Send an initial alert to confirm sniffer is working
-            self.alert_queue.put(Alert(
-                timestamp=datetime.now(),
-                alert_type="System",
-                severity="Info",
-                source="Sniffer",
-                message=f"Network monitoring active on {self.interface}"
-            ))
-            
-            # Also send to Network Intelligence view for visual confirmation
-            self.alert_queue.put(Alert(
-                timestamp=datetime.now(),
-                alert_type="Network",
-                severity="Info",
-                source="Sniffer",
-                message=f"Sniffer capture loop started on {self.interface}"
-            ))
+        while self.running and self.retry_count < self.max_retries:
+            try:
+                self.capture = pyshark.LiveCapture(interface=self.interface, display_filter='ip')
+                
+                # Reset retry count on successful initialization
+                self.retry_count = 0
+                
+                # Send an initial alert to confirm sniffer is working
+                self.alert_queue.put(Alert(
+                    timestamp=datetime.now(),
+                    alert_type="System",
+                    severity="Info",
+                    source="Sniffer",
+                    message=f"Network monitoring active on {self.interface}"
+                ))
+                
+                # Also send to Network Intelligence view for visual confirmation
+                self.alert_queue.put(Alert(
+                    timestamp=datetime.now(),
+                    alert_type="Network",
+                    severity="Info",
+                    source="Sniffer",
+                    message=f"Sniffer capture loop started on {self.interface}"
+                ))
 
-            for packet in self.capture.sniff_continuously():
-                if not self.running:
-                    break
+                for packet in self.capture.sniff_continuously():
+                    if not self.running:
+                        break
+                    
+                    self.process_packet(packet)
+                    
+            except pyshark.capture.tshark.TSharkCrashException as e:
+                self.logger.error(f"TShark crashed: {e}")
+                self._handle_sniffer_error(f"TShark crashed: {e}", "Critical")
+                self.retry_count += 1
                 
-                self.process_packet(packet)
+            except pyshark.capture.capture.TSharkNotFoundException as e:
+                self.logger.error(f"TShark not found: {e}")
+                self._handle_sniffer_error(f"TShark not installed: {e}", "Critical")
+                break  # No point retrying if TShark is missing
                 
-        except Exception as e:
-            print(f"[!] Sniffer thread error: {e}")
-            err_alert = Alert(
-                timestamp=datetime.now(),
-                alert_type="System",
-                severity="Critical",
-                source="Sniffer",
-                message=f"Sniffer crashed: {e}"
-            )
-            self.alert_queue.put(err_alert)
-        finally:
-            if hasattr(self, 'capture'):
-                try:
-                    self.capture.close()
-                except:
-                    pass
-            self.geoip_manager.close()
+            except PermissionError as e:
+                self.logger.error(f"Permission denied for packet capture: {e}")
+                self._handle_sniffer_error(f"Permission denied (run as admin): {e}", "Critical")
+                break  # No point retrying permission errors
+                
+            except OSError as e:
+                self.logger.error(f"Network interface error: {e}")
+                self._handle_sniffer_error(f"Interface error: {e}", "Warning")
+                self.retry_count += 1
+                
+            except Exception as e:
+                self.logger.error(f"Unexpected sniffer error: {e}")
+                self._handle_sniffer_error(f"Unexpected error: {e}", "Critical")
+                self.retry_count += 1
+                
+            finally:
+                if hasattr(self, 'capture'):
+                    try:
+                        self.capture.close()
+                    except:
+                        pass
+            
+            # Retry logic with exponential backoff
+            if self.running and self.retry_count < self.max_retries:
+                delay = min(30, self.retry_delay * (2 ** self.retry_count))
+                self.logger.info(f"Retrying sniffer in {delay} seconds (attempt {self.retry_count + 1}/{self.max_retries})")
+                time.sleep(delay)
+            elif self.retry_count >= self.max_retries:
+                self.logger.error("Max retries reached, stopping sniffer")
+                break
+        
+        self.geoip_manager.close()
+        self.logger.info("Sniffer thread stopped")
 
     def is_noise(self, dst_ip, dst_port, protocol):
         """Identifies mDNS, SSDP, Broadcast, and Multicast traffic."""
@@ -203,6 +239,25 @@ class SnifferThread(threading.Thread):
                     
         except Exception as e:
             print(f"[!] Error processing packet: {e}")
+
+def _handle_sniffer_error(self, error_msg, severity):
+        """Handle sniffer errors by creating alerts and managing state."""
+        try:
+            error_alert = Alert(
+                timestamp=datetime.now(),
+                alert_type="System",
+                severity=severity,
+                source="Sniffer",
+                message=error_msg
+            )
+            self.alert_queue.put(error_alert)
+            self.db_manager.save_alert(error_alert)
+            
+            if severity == "Critical":
+                self.db_manager.log_security_event(error_alert)
+                
+        except Exception as e:
+            self.logger.error(f"Failed to create error alert: {e}")
 
     def stop(self):
         self.running = False
